@@ -64,7 +64,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'config.urls'
 
 CORS_ALLOWED_ORIGINS = [
-    "https://block-head.onrender.com, 
+    "https://block-head.onrender.com", 
     
     "http://localhost:5173",
     "http://127.0.0.1:5173",
