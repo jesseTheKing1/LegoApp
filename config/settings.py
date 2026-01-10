@@ -31,6 +31,8 @@ INSTALLED_APPS = [
 
     'core',
     'accounts',
+    'parts',
+    'sets',
 
     "rest_framework",
     "corsheaders",
