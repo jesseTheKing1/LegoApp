@@ -1,591 +1,627 @@
-import { useEffect, useState } from "react";
-import api from "../api";
+// src/pages/AdminCatalog.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import AdminLayout from "../layouts/AdminLayout";
 
-type Tab = "parts" | "part-colors" | "themes" | "sets";
+/**
+ * Assumes Tailwind is installed.
+ * If you already use shadcn/ui, you can swap components easily.
+ */
 
-function Field({ label, children }: { label: string; children: any }) {
+type TabKey = "parts" | "partColors" | "sets";
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function useIsMobile(breakpointPx = 768) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpointPx);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpointPx]);
+  return isMobile;
+}
+
+function Drawer({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const isMobile = useIsMobile();
+
   return (
-    <label style={{ display: "grid", gap: 6 }}>
-      <div style={{ fontSize: 12, color: "#555" }}>{label}</div>
-      {children}
-    </label>
+    <>
+      {/* Backdrop */}
+      <div
+        className={cx(
+          "fixed inset-0 z-40 bg-black/40 transition-opacity",
+          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <div
+        className={cx(
+          "fixed z-50 bg-white shadow-2xl transition-transform",
+          isMobile
+            ? "inset-0 rounded-none"
+            : "top-0 right-0 h-full w-[520px] max-w-[92vw] rounded-l-2xl",
+          open ? "translate-x-0" : "translate-x-full"
+        )}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold">{title}</h2>
+            <p className="text-xs text-neutral-500">Keep it clean. Fewer fields per section.</p>
+          </div>
+          <button
+            className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+
+        <div className={cx("h-[calc(100%-56px)] overflow-auto", isMobile && "pb-24")}>
+          {children}
+        </div>
+      </div>
+    </>
   );
 }
 
-export default function AdminPage() {
-  const [tab, setTab] = useState<Tab>("parts");
-
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={{ padding: 24, display: "grid", gap: 16 }}>
-      <h1>Admin</h1>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <TabButton current={tab} value="parts" setTab={setTab} />
-        <TabButton current={tab} value="part-colors" setTab={setTab} />
-        <TabButton current={tab} value="themes" setTab={setTab} />
-        <TabButton current={tab} value="sets" setTab={setTab} />
+    <div className="px-4 py-4">
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description ? <p className="text-xs text-neutral-500">{description}</p> : null}
       </div>
-
-      {tab === "parts" && <PartsAdmin />}
-      {tab === "part-colors" && <PartColorsAdmin />}
-      {tab === "themes" && <ThemesAdmin />}
-      {tab === "sets" && <SetsAdmin />}
+      <div className="grid gap-3">{children}</div>
     </div>
   );
 }
 
-function TabButton({
-  current,
-  value,
-  setTab,
+function Field({
+  label,
+  hint,
+  children,
 }: {
-  current: string;
-  value: Tab;
-  setTab: (t: Tab) => void;
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
 }) {
-  const active = current === value;
+  return (
+    <label className="grid gap-1">
+      <span className="text-xs font-medium text-neutral-700">{label}</span>
+      {children}
+      {hint ? <span className="text-[11px] text-neutral-500">{hint}</span> : null}
+    </label>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cx(
+        "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none",
+        "focus:border-neutral-400 focus:ring-4 focus:ring-neutral-100"
+      )}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={cx(
+        "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none",
+        "focus:border-neutral-400 focus:ring-4 focus:ring-neutral-100"
+      )}
+    />
+  );
+}
+
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={cx(
+        "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none",
+        "focus:border-neutral-400 focus:ring-4 focus:ring-neutral-100"
+      )}
+    />
+  );
+}
+
+function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      onClick={() => setTab(value)}
-      style={{
-        padding: "8px 12px",
-        borderRadius: 10,
-        border: "1px solid #ddd",
-        background: active ? "#111" : "#fff",
-        color: active ? "#fff" : "#111",
-        cursor: "pointer",
-      }}
-    >
-      {value}
-    </button>
-  );
-}
-
-/** ---------------- PARTS ---------------- */
-type Part = {
-  id: number;
-  part_id: string;
-  name: string;
-  general_category?: string;
-  specific_category?: string;
-};
-
-function PartsAdmin() {
-  const [items, setItems] = useState<Part[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  // form
-  const [part_id, setPartId] = useState("");
-  const [name, setName] = useState("");
-  const [general_category, setGeneral] = useState("");
-  const [specific_category, setSpecific] = useState("");
-
-  async function load() {
-    setErr(null);
-    setLoading(true);
-    try {
-      const res = await api.get("/api/admin/parts/");
-      setItems(res.data);
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Failed to load parts");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function create() {
-    setErr(null);
-    try {
-      await api.post("/api/admin/parts/", {
-        part_id: part_id.trim(),
-        name: name.trim(),
-        general_category: general_category.trim(),
-        specific_category: specific_category.trim(),
-      });
-      setPartId("");
-      setName("");
-      setGeneral("");
-      setSpecific("");
-      await load();
-    } catch (e: any) {
-      setErr(JSON.stringify(e?.response?.data || "Create failed"));
-    }
-  }
-
-  async function remove(id: number) {
-    setErr(null);
-    try {
-      await api.delete(`/api/admin/parts/${id}/`);
-      await load();
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Delete failed");
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  return (
-    <section style={{ display: "grid", gap: 16 }}>
-      <h2>Parts</h2>
-
-      <div style={{ display: "grid", gap: 10, maxWidth: 520 }}>
-        <Field label="Part ID (shape id)">
-          <input value={part_id} onChange={(e) => setPartId(e.target.value)} />
-        </Field>
-        <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        <Field label="General category">
-          <input value={general_category} onChange={(e) => setGeneral(e.target.value)} />
-        </Field>
-        <Field label="Specific category">
-          <input value={specific_category} onChange={(e) => setSpecific(e.target.value)} />
-        </Field>
-
-        <button onClick={create} style={{ padding: 10, borderRadius: 10 }}>
-          Add Part
-        </button>
-      </div>
-
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div style={{ display: "grid", gap: 8 }}>
-          {items.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                border: "1px solid #eee",
-                borderRadius: 12,
-                padding: 12,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div>
-                <b>{p.part_id}</b> — {p.name}
-                <div style={{ fontSize: 12, color: "#666" }}>
-                  {p.general_category} / {p.specific_category}
-                </div>
-              </div>
-              <button onClick={() => remove(p.id)} style={{ borderRadius: 10 }}>
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
+      {...props}
+      className={cx(
+        "rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white",
+        "hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
       )}
-    </section>
+    />
   );
 }
 
-/** ---------------- PART COLORS ---------------- */
-type PartColor = {
-  id: number;
-  part: Part; // nested read
-  color_name: string;
-  variant?: string;
-  image_url_1?: string;
-  image_url_2?: string;
-};
+function SecondaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={cx(
+        "rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900",
+        "hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      )}
+    />
+  );
+}
 
-function PartColorsAdmin() {
-  const [items, setItems] = useState<PartColor[]>([]);
-  const [parts, setParts] = useState<Part[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+/** Replace these with real API data */
+type Part = { id: number; number: string; name: string; category?: string; image_url?: string };
+type PartColor = { id: number; part_number: string; color_name: string; color_hex?: string; partName?: string };
+type SetItem = { id: number; title: string; set_number?: string; theme?: string; image_url?: string };
 
-  // form
-  const [partId, setPartId] = useState<number | "">("");
-  const [color_name, setColorName] = useState("");
-  const [variant, setVariant] = useState("");
-  const [image_url_1, setImg1] = useState("");
-  const [image_url_2, setImg2] = useState("");
+export default function AdminCatalog() {
+  const [tab, setTab] = useState<TabKey>("parts");
+  const [search, setSearch] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mode, setMode] = useState<"create" | "edit">("create");
 
-  async function load() {
-    setErr(null);
-    setLoading(true);
-    try {
-      const [colorsRes, partsRes] = await Promise.all([
-        api.get("/api/admin/part-colors/"),
-        api.get("/api/admin/parts/"),
-      ]);
-      setItems(colorsRes.data);
-      setParts(partsRes.data);
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Failed to load part colors");
-    } finally {
-      setLoading(false);
+  // selected rows
+  const [selectedPart, setSelectedPart] = useState<Part | null>(null);
+  const [selectedPartColor, setSelectedPartColor] = useState<PartColor | null>(null);
+  const [selectedSet, setSelectedSet] = useState<SetItem | null>(null);
+
+  // dummy lists
+  const parts: Part[] = [
+    { id: 1, number: "3001", name: "Brick 2 x 4", category: "Bricks", image_url: "" },
+    { id: 2, number: "3023", name: "Plate 1 x 2", category: "Plates", image_url: "" },
+  ];
+  const partColors: PartColor[] = [
+    { id: 1, part_number: "3001", color_name: "Red", color_hex: "#c91a09", partName: "Brick 2 x 4" },
+    { id: 2, part_number: "3023", color_name: "Black", color_hex: "#1b2a34", partName: "Plate 1 x 2" },
+  ];
+  const sets: SetItem[] = [
+    { id: 1, title: "Police Station", set_number: "10278", theme: "Creator Expert" },
+    { id: 2, title: "Medieval Blacksmith", set_number: "21325", theme: "Ideas" },
+  ];
+
+  const data = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (tab === "parts") {
+      return parts.filter((p) => `${p.number} ${p.name} ${p.category ?? ""}`.toLowerCase().includes(q));
     }
+    if (tab === "partColors") {
+      return partColors.filter((pc) =>
+        `${pc.part_number} ${pc.color_name} ${pc.partName ?? ""}`.toLowerCase().includes(q)
+      );
+    }
+    return sets.filter((s) => `${s.set_number ?? ""} ${s.title} ${s.theme ?? ""}`.toLowerCase().includes(q));
+  }, [tab, search]);
+
+  function openCreate() {
+    setMode("create");
+    setSelectedPart(null);
+    setSelectedPartColor(null);
+    setSelectedSet(null);
+    setDrawerOpen(true);
   }
 
-  async function create() {
-    setErr(null);
-    if (!partId) return setErr("Pick a Part first.");
-    try {
-      await api.post("/api/admin/part-colors/", {
-        part_id: partId, // matches serializer write field: part_id -> part FK
-        color_name: color_name.trim(),
-        variant: variant.trim(),
-        image_url_1: image_url_1.trim(),
-        image_url_2: image_url_2.trim(),
-      });
-      setPartId("");
-      setColorName("");
-      setVariant("");
-      setImg1("");
-      setImg2("");
-      await load();
-    } catch (e: any) {
-      setErr(JSON.stringify(e?.response?.data || "Create failed"));
-    }
+  function openEdit(row: any) {
+    setMode("edit");
+    if (tab === "parts") setSelectedPart(row);
+    if (tab === "partColors") setSelectedPartColor(row);
+    if (tab === "sets") setSelectedSet(row);
+    setDrawerOpen(true);
   }
 
-  async function remove(id: number) {
-    setErr(null);
-    try {
-      await api.delete(`/api/admin/part-colors/${id}/`);
-      await load();
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Delete failed");
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+  const drawerTitle =
+    tab === "parts"
+      ? mode === "create"
+        ? "New Part"
+        : `Edit Part`
+      : tab === "partColors"
+      ? mode === "create"
+        ? "New Part Color"
+        : `Edit Part Color`
+      : mode === "create"
+      ? "New Set"
+      : "Edit Set";
 
   return (
-    <section style={{ display: "grid", gap: 16 }}>
-      <h2>Part Colors</h2>
+  <AdminLayout>
+    {/* Top header */}
+    <div className="border-b border-neutral-200 bg-white">
+      <div className="px-4 sm:px-6 py-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+              Catalog Admin
+            </h1>
+            <p className="mt-1 text-sm text-neutral-500">
+              Manage Parts, Colors, and Sets with clean create/edit flows.
+            </p>
+          </div>
 
-      <div style={{ display: "grid", gap: 10, maxWidth: 620 }}>
-        <Field label="Part (shape)">
-          <select value={partId} onChange={(e) => setPartId(e.target.value ? Number(e.target.value) : "")}>
-            <option value="">Select Part…</option>
-            {parts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.part_id} — {p.name}
-              </option>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="w-full sm:w-[360px]">
+              <Input
+                placeholder={`Search ${tab === "parts" ? "parts" : tab === "partColors" ? "part colors" : "sets"}…`}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <PrimaryButton onClick={openCreate} className="w-full sm:w-auto">
+              + New
+            </PrimaryButton>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Content area */}
+    <div className="bg-neutral-50">
+      <div className="px-4 sm:px-6 py-6 grid gap-4">
+        {/* Tabs / toolbar */}
+        <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="inline-flex w-full sm:w-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
+              {(["parts", "partColors", "sets"] as TabKey[]).map((k) => (
+                <button
+                  key={k}
+                  className={cx(
+                    "flex-1 sm:flex-none rounded-xl px-4 py-2 text-sm font-medium transition",
+                    tab === k
+                      ? "bg-white text-neutral-900 shadow-sm border border-neutral-200"
+                      : "text-neutral-600 hover:text-neutral-900"
+                  )}
+                  onClick={() => {
+                    setTab(k);
+                    setSearch("");
+                  }}
+                >
+                  {k === "parts" ? "Parts" : k === "partColors" ? "Part Colors" : "Sets"}
+                </button>
+              ))}
+            </div>
+
+            <div className="sm:ml-auto text-sm text-neutral-500">
+              Showing <span className="font-semibold text-neutral-900">{data.length}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Table / Cards */}
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+          {/* Desktop */}
+          <div className="hidden md:block">
+            <table className="w-full">
+              <thead className="bg-neutral-50 text-xs text-neutral-500">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold">Item</th>
+                  <th className="px-6 py-3 text-left font-semibold">Details</th>
+                  <th className="px-6 py-3 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {data.map((row: any) => (
+                  <tr key={row.id} className="border-t border-neutral-100 hover:bg-neutral-50/70">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-neutral-900">
+                        {tab === "parts" && `${row.number} — ${row.name}`}
+                        {tab === "partColors" && `${row.part_number} — ${row.color_name}`}
+                        {tab === "sets" && `${row.set_number ?? ""} — ${row.title}`}
+                      </div>
+                      <div className="mt-1 text-xs text-neutral-500">ID: {row.id}</div>
+                    </td>
+
+                    <td className="px-6 py-4 text-neutral-700">
+                      {tab === "parts" && (
+                        <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                          {row.category ?? "—"}
+                        </span>
+                      )}
+
+                      {tab === "partColors" && (
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{row.partName ?? "—"}</span>
+                          {row.color_hex ? (
+                            <span className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                              <span
+                                className="h-3 w-3 rounded-full border border-neutral-200"
+                                style={{ backgroundColor: row.color_hex }}
+                              />
+                              {row.color_hex}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {tab === "sets" && (
+                        <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                          {row.theme ?? "—"}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4 text-right">
+                      <div className="inline-flex gap-2">
+                        <SecondaryButton onClick={() => openEdit(row)}>Edit</SecondaryButton>
+                        <button className="rounded-xl px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {data.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-12 text-center">
+                      <div className="text-sm font-semibold text-neutral-900">No results</div>
+                      <div className="mt-1 text-sm text-neutral-500">
+                        Try a different search or create a new item.
+                      </div>
+                      <div className="mt-4">
+                        <PrimaryButton onClick={openCreate}>+ New</PrimaryButton>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile */}
+          <div className="md:hidden p-3 grid gap-3">
+            {data.map((row: any) => (
+              <button
+                key={row.id}
+                onClick={() => openEdit(row)}
+                className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+              >
+                <div className="text-base font-semibold text-neutral-900">
+                  {tab === "parts" && `${row.number} — ${row.name}`}
+                  {tab === "partColors" && `${row.part_number} — ${row.color_name}`}
+                  {tab === "sets" && `${row.set_number ?? ""} — ${row.title}`}
+                </div>
+                <div className="mt-1 text-sm text-neutral-500">
+                  {tab === "parts" && (row.category ?? "—")}
+                  {tab === "partColors" && (row.partName ?? "—")}
+                  {tab === "sets" && (row.theme ?? "—")}
+                </div>
+                <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+                  <span>ID: {row.id}</span>
+                  <span className="font-medium text-neutral-900">Tap to edit</span>
+                </div>
+              </button>
             ))}
-          </select>
-        </Field>
 
-        <Field label="Color name">
-          <input value={color_name} onChange={(e) => setColorName(e.target.value)} />
-        </Field>
-
-        <Field label="Variant (optional: print/decal)">
-          <input value={variant} onChange={(e) => setVariant(e.target.value)} />
-        </Field>
-
-        <Field label="Image URL 1">
-          <input value={image_url_1} onChange={(e) => setImg1(e.target.value)} />
-        </Field>
-
-        <Field label="Image URL 2">
-          <input value={image_url_2} onChange={(e) => setImg2(e.target.value)} />
-        </Field>
-
-        <button onClick={create} style={{ padding: 10, borderRadius: 10 }}>
-          Add Part Color
-        </button>
-      </div>
-
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div style={{ display: "grid", gap: 8 }}>
-          {items.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                border: "1px solid #eee",
-                borderRadius: 12,
-                padding: 12,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div>
-                <b>{c.part?.part_id}</b> — {c.color_name}
-                <div style={{ fontSize: 12, color: "#666" }}>
-                  {c.part?.name} {c.variant ? `• ${c.variant}` : ""}
+            {data.length === 0 ? (
+              <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center">
+                <div className="text-sm font-semibold text-neutral-900">No results</div>
+                <div className="mt-1 text-sm text-neutral-500">
+                  Try a different search or create a new item.
+                </div>
+                <div className="mt-4">
+                  <PrimaryButton onClick={openCreate} className="w-full">
+                    + New
+                  </PrimaryButton>
                 </div>
               </div>
-              <button onClick={() => remove(c.id)} style={{ borderRadius: 10 }}>
-                Delete
-              </button>
-            </div>
-          ))}
+            ) : null}
+          </div>
         </div>
+      </div>
+    </div>
+
+    {/* Drawer */}
+    <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={drawerTitle}>
+      {tab === "parts" ? (
+        <PartForm mode={mode} initial={selectedPart} onCancel={() => setDrawerOpen(false)} onSave={() => setDrawerOpen(false)} />
+      ) : tab === "partColors" ? (
+        <PartColorForm mode={mode} initial={selectedPartColor} onCancel={() => setDrawerOpen(false)} onSave={() => setDrawerOpen(false)} />
+      ) : (
+        <SetForm mode={mode} initial={selectedSet} onCancel={() => setDrawerOpen(false)} onSave={() => setDrawerOpen(false)} />
       )}
-    </section>
+    </Drawer>
+  </AdminLayout>
+);
+
+
+}
+
+function FormFooter({
+  mode,
+  onCancel,
+  onSave,
+  saving,
+}: {
+  mode: "create" | "edit";
+  onCancel: () => void;
+  onSave: () => void;
+  saving?: boolean;
+}) {
+  return (
+    <div className="sticky bottom-0 border-t bg-white px-4 py-3">
+      <div className="flex items-center justify-end gap-2">
+        <SecondaryButton onClick={onCancel} type="button">
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton onClick={onSave} disabled={!!saving} type="button">
+          {saving ? "Saving…" : mode === "create" ? "Create" : "Save changes"}
+        </PrimaryButton>
+      </div>
+    </div>
   );
 }
 
-/** ---------------- THEMES ---------------- */
-type Theme = { id: number; name: string; image_url?: string };
-
-function ThemesAdmin() {
-  const [items, setItems] = useState<Theme[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  const [name, setName] = useState("");
-  const [image_url, setImageUrl] = useState("");
-
-  async function load() {
-    setErr(null);
-    setLoading(true);
-    try {
-      const res = await api.get("/api/admin/themes/");
-      setItems(res.data);
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Failed to load themes");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function create() {
-    setErr(null);
-    try {
-      await api.post("/api/admin/themes/", { name: name.trim(), image_url: image_url.trim() });
-      setName("");
-      setImageUrl("");
-      await load();
-    } catch (e: any) {
-      setErr(JSON.stringify(e?.response?.data || "Create failed"));
-    }
-  }
-
-  async function remove(id: number) {
-    setErr(null);
-    try {
-      await api.delete(`/api/admin/themes/${id}/`);
-      await load();
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Delete failed");
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+/** Example forms (wire these to your API) */
+function PartForm({
+  mode,
+  initial,
+  onCancel,
+  onSave,
+}: {
+  mode: "create" | "edit";
+  initial: any;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const [number, setNumber] = useState(initial?.number ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [category, setCategory] = useState(initial?.category ?? "");
+  const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
 
   return (
-    <section style={{ display: "grid", gap: 16 }}>
-      <h2>Themes</h2>
-
-      <div style={{ display: "grid", gap: 10, maxWidth: 520 }}>
+    <>
+      <Section title="Basics" description="The 2–3 fields you’ll use every time.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Part Number">
+            <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. 3001" />
+          </Field>
+          <Field label="Category">
+            <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Bricks, Plates, Tiles…" />
+          </Field>
+        </div>
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Brick 2 x 4" />
         </Field>
-        <Field label="Image URL">
-          <input value={image_url} onChange={(e) => setImageUrl(e.target.value)} />
+      </Section>
+
+      <div className="border-t" />
+
+      <Section title="Image" description="Use a URL for now; later you can support uploads.">
+        <Field label="Image URL" hint="Tip: keep images consistent size/aspect ratio for a premium feel.">
+          <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…" />
         </Field>
+      </Section>
 
-        <button onClick={create} style={{ padding: 10, borderRadius: 10 }}>
-          Add Theme
-        </button>
-      </div>
-
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div style={{ display: "grid", gap: 8 }}>
-          {items.map((t) => (
-            <div
-              key={t.id}
-              style={{
-                border: "1px solid #eee",
-                borderRadius: 12,
-                padding: 12,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div>
-                <b>{t.name}</b>
-              </div>
-              <button onClick={() => remove(t.id)} style={{ borderRadius: 10 }}>
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+      <FormFooter mode={mode} onCancel={onCancel} onSave={onSave} />
+    </>
   );
 }
 
-/** ---------------- SETS ---------------- */
-type SetRow = {
-  id: number;
-  number: string;
-  set_name: string;
-  image_url?: string;
-  age?: string;
-  piece_count?: number;
-  theme?: Theme; // nested read
-};
-
-function SetsAdmin() {
-  const [items, setItems] = useState<SetRow[]>([]);
-  const [themes, setThemes] = useState<Theme[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  // form
-  const [number, setNumber] = useState("");
-  const [set_name, setSetName] = useState("");
-  const [image_url, setImageUrl] = useState("");
-  const [age, setAge] = useState("");
-  const [piece_count, setPieceCount] = useState<number | "">("");
-  const [themeId, setThemeId] = useState<number | "">("");
-
-  async function load() {
-    setErr(null);
-    setLoading(true);
-    try {
-      const [setsRes, themesRes] = await Promise.all([
-        api.get("/api/admin/sets/"),
-        api.get("/api/admin/themes/"),
-      ]);
-      setItems(setsRes.data);
-      setThemes(themesRes.data);
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Failed to load sets");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function create() {
-    setErr(null);
-    if (!themeId) return setErr("Pick a Theme.");
-    try {
-      await api.post("/api/admin/sets/", {
-        number: number.trim(),
-        set_name: set_name.trim(),
-        image_url: image_url.trim(),
-        age: age.trim(),
-        piece_count: piece_count === "" ? null : piece_count,
-        theme_id: themeId, // matches serializer write field: theme_id -> theme FK
-      });
-      setNumber("");
-      setSetName("");
-      setImageUrl("");
-      setAge("");
-      setPieceCount("");
-      setThemeId("");
-      await load();
-    } catch (e: any) {
-      setErr(JSON.stringify(e?.response?.data || "Create failed"));
-    }
-  }
-
-  async function remove(id: number) {
-    setErr(null);
-    try {
-      await api.delete(`/api/admin/sets/${id}/`);
-      await load();
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Delete failed");
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
+function PartColorForm({
+  mode,
+  initial,
+  onCancel,
+  onSave,
+}: {
+  mode: "create" | "edit";
+  initial: any;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const [partNumber, setPartNumber] = useState(initial?.part_number ?? "");
+  const [colorName, setColorName] = useState(initial?.color_name ?? "");
+  const [colorHex, setColorHex] = useState(initial?.color_hex ?? "");
 
   return (
-    <section style={{ display: "grid", gap: 16 }}>
-      <h2>Sets</h2>
-
-      <div style={{ display: "grid", gap: 10, maxWidth: 700 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Field label="Set number">
-            <input value={number} onChange={(e) => setNumber(e.target.value)} />
-          </Field>
-          <Field label="Set name">
-            <input value={set_name} onChange={(e) => setSetName(e.target.value)} />
-          </Field>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Field label="Age">
-            <input value={age} onChange={(e) => setAge(e.target.value)} />
-          </Field>
-          <Field label="Piece count">
-            <input
-              value={piece_count}
-              onChange={(e) => setPieceCount(e.target.value ? Number(e.target.value) : "")}
-              type="number"
-            />
-          </Field>
-        </div>
-
-        <Field label="Theme">
-          <select value={themeId} onChange={(e) => setThemeId(e.target.value ? Number(e.target.value) : "")}>
-            <option value="">Select Theme…</option>
-            {themes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+    <>
+      <Section title="Link + Color" description="Use official LEGO colors consistently.">
+        <Field label="Part Number" hint="This should match your Part.number.">
+          <Input value={partNumber} onChange={(e) => setPartNumber(e.target.value)} placeholder="e.g. 3001" />
         </Field>
 
-        <Field label="Image URL">
-          <input value={image_url} onChange={(e) => setImageUrl(e.target.value)} />
-        </Field>
-
-        <button onClick={create} style={{ padding: 10, borderRadius: 10 }}>
-          Add Set
-        </button>
-      </div>
-
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div style={{ display: "grid", gap: 8 }}>
-          {items.map((s) => (
-            <div
-              key={s.id}
-              style={{
-                border: "1px solid #eee",
-                borderRadius: 12,
-                padding: 12,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div>
-                <b>{s.number}</b> — {s.set_name}
-                <div style={{ fontSize: 12, color: "#666" }}>
-                  {s.theme?.name ? `Theme: ${s.theme.name}` : ""} {s.piece_count ? `• ${s.piece_count} pcs` : ""}
-                </div>
-              </div>
-              <button onClick={() => remove(s.id)} style={{ borderRadius: 10 }}>
-                Delete
-              </button>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Color Name">
+            <Input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Red" />
+          </Field>
+          <Field label="Color Hex">
+            <Input value={colorHex} onChange={(e) => setColorHex(e.target.value)} placeholder="#c91a09" />
+          </Field>
         </div>
-      )}
-    </section>
+
+        <div className="flex items-center gap-3 rounded-2xl border bg-neutral-50 p-3">
+          <div
+            className="h-10 w-10 rounded-xl border bg-white"
+            style={{ backgroundColor: colorHex || "#ffffff" }}
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold truncate">{colorName || "Preview"}</div>
+            <div className="text-xs text-neutral-500 truncate">{colorHex || "No hex yet"}</div>
+          </div>
+        </div>
+      </Section>
+
+      <FormFooter mode={mode} onCancel={onCancel} onSave={onSave} />
+    </>
   );
 }
+
+function SetForm({
+  mode,
+  initial,
+  onCancel,
+  onSave,
+}: {
+  mode: "create" | "edit";
+  initial: any;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [setNumber, setSetNumber] = useState(initial?.set_number ?? "");
+  const [theme, setTheme] = useState(initial?.theme ?? "");
+  const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
+  const [notes, setNotes] = useState("");
+
+  return (
+    <>
+    <AdminLayout children={undefined}>
+
+
+    </AdminLayout>
+      <Section title="Set Details" description="Keep it simple. Add advanced fields later.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Set Number">
+            <Input value={setNumber} onChange={(e) => setSetNumber(e.target.value)} placeholder="e.g. 21325" />
+          </Field>
+          <Field label="Theme">
+            <Input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="Ideas, City…" />
+          </Field>
+        </div>
+        <Field label="Title">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Medieval Blacksmith" />
+        </Field>
+      </Section>
+
+      <div className="border-t" />
+
+      <Section title="Media + Notes" description="Optional, but helps polish the catalog.">
+        <Field label="Image URL">
+          <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…" />
+        </Field>
+        <Field label="Internal Notes">
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything helpful…" rows={4} />
+        </Field>
+      </Section>
+
+      <FormFooter mode={mode} onCancel={onCancel} onSave={onSave} />
+    </>
+  );
+}
+
