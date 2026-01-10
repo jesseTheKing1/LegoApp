@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login } from "../auth";
+import { signup, login } from "../auth";
 import { useAuth } from "../AuthProvider";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,11 +17,13 @@ export default function LoginPage() {
     setErr(null);
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      await signup(username.trim(), email.trim(), password);
+      await login(username.trim(), password); // auto-login
       await refresh();
       nav("/");
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Login failed");
+      const data = e?.response?.data;
+      setErr(data?.detail || (typeof data === "string" ? data : JSON.stringify(data)) || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -28,16 +31,17 @@ export default function LoginPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 380 }}>
-      <h1>Login</h1>
+      <h1>Create account</h1>
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
         <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optional)" />
         <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" />
         {err && <div style={{ color: "crimson" }}>{err}</div>}
-        <button disabled={loading}>{loading ? "Logging in…" : "Login"}</button>
+        <button disabled={loading}>{loading ? "Creating…" : "Create account"}</button>
       </form>
 
       <p style={{ marginTop: 12 }}>
-        No account? <Link to="/signup">Create one</Link>
+        Already have one? <Link to="/login">Login</Link>
       </p>
     </div>
   );
