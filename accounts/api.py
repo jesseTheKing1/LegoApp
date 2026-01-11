@@ -5,10 +5,11 @@ from rest_framework.response import Response
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
-    u = request.user
+    user = request.user
     return Response({
-        "id": u.id,
-        "username": u.username,
-        "is_staff": u.is_staff,
-        "is_superuser": u.is_superuser,
+        "id": user.id,
+        "email": getattr(user, "email", None),
+        "username": getattr(user, "username", None),
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
     })
