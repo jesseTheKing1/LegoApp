@@ -1,3 +1,4 @@
+// src/auth.ts
 import api from "./api";
 
 export type Me = {
@@ -8,19 +9,24 @@ export type Me = {
 };
 
 export async function signup(username: string, email: string, password: string) {
-  const res = await api.post("/api/signup/", { username, email, password });
+  // baseURL already ends with /api
+  const res = await api.post("/signup/", { username, email, password });
   return res.data;
 }
 
 export async function login(username: string, password: string) {
-  const res = await api.post("/api/token/", { username, password });
+  // baseURL already ends with /api
+  const res = await api.post("/token/", { username, password });
+
   localStorage.setItem("access_token", res.data.access);
   localStorage.setItem("refresh_token", res.data.refresh);
+
   return res.data;
 }
 
 export async function fetchMe(): Promise<Me> {
-  const res = await api.get("/api/me/");
+  // baseURL already ends with /api
+  const res = await api.get("/me/");
   return res.data;
 }
 
