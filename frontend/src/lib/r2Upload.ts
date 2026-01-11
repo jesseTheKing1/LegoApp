@@ -1,32 +1,36 @@
-import api from "../api"; // your axios instance
+// src/lib/r2Upload.ts
+import api from "../api";
 
-export async function uploadImageToR2(file: File, folder: string): Promise<string> {
-  // 1) ask Django for presigned URL
-  const presign = await api.post("/r2/presign-upload/", {
+type PresignResponse = {
+  upload_url: string;
+  public_url: string;
+};
+
+export async function uploadImageToR2(file: File, folder: string) {
+  // 1) ask backend for presigned PUT url
+  const presign = await api.post<PresignResponse>("/r2/presign/", {
     folder,
     filename: file.name,
     content_type: file.type || "application/octet-stream",
   });
 
-  const { upload_url, public_url } = presign.data as {
-    upload_url: string;
-    public_url: string;
-  };
+  const { upload_url, public_url } = presign.data;
 
-  // 2) upload directly to R2
-  const res = await fetch(upload_url, {
+  // 2) upload file directly to R2 via PUT
+  const putRes = await fetch(upload_url, {
     method: "PUT",
+    body: file,
     headers: {
       "Content-Type": file.type || "application/octet-stream",
+      // IMPORTANT: do NOT add Authorization headers here
     },
-    body: file,
   });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`R2 upload failed (${res.status}) ${text}`);
+  if (!putRes.ok) {
+    const text = await putRes.text().catch(() => "");
+    throw new Error(`R2 upload failed (${putRes.status}). ${text}`);
   }
 
-  // 3) return the public URL you store in Django model
+  // 3) return the permanent public URL to store in Django
   return public_url;
 }

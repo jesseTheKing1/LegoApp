@@ -4,12 +4,6 @@ import AdminLayout from "../layouts/AdminLayout";
 import api from "../api";
 import { uploadImageToR2 } from "../lib/r2Upload";
 
-/**
- * PRODUCTION ADMIN CATALOG
- * - Real API fetch + CRUD
- * - R2 image upload (presigned URL flow)
- * - Fields mirror Django serializers
- */
 
 type TabKey = "parts" | "partColors" | "sets";
 
