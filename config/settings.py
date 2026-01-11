@@ -4,11 +4,6 @@ import dj_database_url
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-7d3ky-upx!ddgef568kcwittzs9^-zydiod(c#9@zbd3szyc%%'
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -52,17 +47,19 @@ REST_FRAMEWORK = {
 
 
 MIDDLEWARE = [
-    "whitenoise.middleware.WhiteNoiseMiddleware", 
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
 
 ROOT_URLCONF = 'config.urls'
 
@@ -143,6 +140,13 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", SECRET_KEY)
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
+DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+
+ALLOWED_HOSTS = os.environ.get(
+    "DJANGO_ALLOWED_HOSTS",
+    "legoapp-web.onrender.com,localhost,127.0.0.1"
+).split(",")
+ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS if h.strip()]

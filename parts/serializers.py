@@ -9,25 +9,17 @@ class PartSerializer(serializers.ModelSerializer):
         model = Part
         fields = ["id", "part_id", "name", "general_category", "specific_category", "thumb_url"]
 
-    def get_thumb_url(self, obj: Part):
-        # pick any PartColor with an image
+    def get_thumb_url(self, obj):
+        # safest: query PartColor table directly
         pc = (
-            obj.partcolor_set
-              .filter(image_url_1__isnull=False)
-              .exclude(image_url_1="")
-              .first()
+            PartColor.objects
+            .filter(part=obj)
+            .exclude(image_url_1__isnull=True)
+            .exclude(image_url_1="")
+            .only("image_url_1")
+            .first()
         )
-        if pc and pc.image_url_1:
-            return pc.image_url_1
-
-        pc2 = (
-            obj.partcolor_set
-              .filter(image_url_2__isnull=False)
-              .exclude(image_url_2="")
-              .first()
-        )
-        return pc2.image_url_2 if pc2 else None
-
+        return pc.image_url_1 if pc else None
 
 class PartColorSerializer(serializers.ModelSerializer):
     part = PartSerializer(read_only=True)

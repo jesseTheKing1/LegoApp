@@ -2,12 +2,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../layouts/AdminLayout";
 import api from "../api";
-import { uploadImageToR2 } from "../lib/r2Upload";
 import { Drawer } from "../components/ui/Drawer";
 import { Section } from "../components/ui/Section";
 import { Field } from "../components/ui/Field";
 import { Input } from "../components/ui/Input";
+
 import { PartColorForm } from "./AdminCatalog/forms/PartColorForm";
+import { Thumb } from "../components/ui/Tumb";
 
 type TabKey = "parts" | "partColors" | "sets";
 
@@ -18,66 +19,73 @@ const ENDPOINTS = {
   themes: "/admin/themes/",
 };
 
-
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
 function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { className, ...rest } = props;
   return (
     <button
-      {...props}
+      {...rest}
       className={cx(
         "rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white",
-        "hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        "hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed",
+        className
       )}
     />
   );
 }
 
 function SecondaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { className, ...rest } = props;
   return (
     <button
-      {...props}
+      {...rest}
       className={cx(
         "rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900",
-        "hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        "hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed",
+        className
       )}
     />
   );
 }
 
 function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { className, ...rest } = props;
   return (
     <button
-      {...props}
+      {...rest}
       className={cx(
         "rounded-xl px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50",
-        "disabled:opacity-50 disabled:cursor-not-allowed"
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        className
       )}
     />
   );
 }
 
 /** ---- TYPES THAT MIRROR DJANGO SERIALIZERS ---- */
-type Part = {
+export type Part = {
   id: number;
   part_id: string;
   name: string;
   general_category: string;
   specific_category: string;
+  thumb_url?: string | null; // backend should provide this (recommended)
 };
 
-type PartColor = {
-  id: number;
+export type PartColor = {
+  id: number; // ✅ THIS is the color id you want to manually enter
   color_name: string;
   variant: string;
   image_url_1: string | null;
   image_url_2: string | null;
+  thumb_url?: string | null; // backend can provide, otherwise fallback to url1/url2
   part: Part; // read-only nested part
 };
 
-type SetItem = {
+export type SetItem = {
   id: number;
   number: string;
   set_name: string;
@@ -88,8 +96,19 @@ type SetItem = {
 };
 
 function toast(msg: string) {
-  // keep it simple; swap to a real toast later
   alert(msg);
+}
+
+function getRowThumb(tab: TabKey, row: any): string | null {
+  if (tab === "parts") {
+    // expects backend field thumb_url; if not present it will show placeholder
+    return row.thumb_url ?? null;
+  }
+  if (tab === "partColors") {
+    return row.thumb_url ?? row.image_url_1 ?? row.image_url_2 ?? null;
+  }
+  // sets
+  return row.image_url ?? null;
 }
 
 export default function AdminCatalog() {
@@ -129,9 +148,18 @@ export default function AdminCatalog() {
       setLoading(false);
     }
   }
+
+  // Load tab data
   useEffect(() => {
-  // When working on Part Colors, we need Parts for the dropdown.
-  if (tab === "partColors" && parts.length === 0) {
+    void fetchTabData(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // Ensure Parts are loaded when working with Part Colors (dropdown needs it)
+  useEffect(() => {
+    if (tab !== "partColors") return;
+    if (parts.length > 0) return;
+
     api
       .get(ENDPOINTS.parts)
       .then((res) => setParts(res.data))
@@ -139,13 +167,8 @@ export default function AdminCatalog() {
         console.error(e);
         toast("Failed to load Parts for Part Colors dropdown.");
       });
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [tab]);
-  useEffect(() => {
-    fetchTabData(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, parts.length]);
 
   const data = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -157,12 +180,12 @@ export default function AdminCatalog() {
     }
     if (tab === "partColors") {
       return partColors.filter((pc) =>
-        `${pc.part?.part_id ?? ""} ${pc.part?.name ?? ""} ${pc.color_name} ${pc.variant}`.toLowerCase().includes(q)
+        `${pc.part?.part_id ?? ""} ${pc.part?.name ?? ""} ${pc.id ?? ""} ${pc.color_name} ${pc.variant}`
+          .toLowerCase()
+          .includes(q)
       );
     }
-    return sets.filter((s) =>
-      `${s.number} ${s.set_name} ${s.theme?.name ?? ""}`.toLowerCase().includes(q)
-    );
+    return sets.filter((s) => `${s.number} ${s.set_name} ${s.theme?.name ?? ""}`.toLowerCase().includes(q));
   }, [tab, search, parts, partColors, sets]);
 
   function openCreate() {
@@ -206,26 +229,24 @@ export default function AdminCatalog() {
     tab === "parts"
       ? mode === "create"
         ? "New Part"
-        : `Edit Part`
+        : "Edit Part"
       : tab === "partColors"
       ? mode === "create"
         ? "New Part Color"
-        : `Edit Part Color`
+        : "Edit Part Color"
       : mode === "create"
       ? "New Set"
       : "Edit Set";
 
   return (
     <AdminLayout>
-      {/* Top header */}
+      {/* Header */}
       <div className="border-b border-neutral-200 bg-white">
         <div className="px-4 sm:px-6 py-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Catalog Admin</h1>
-              <p className="mt-1 text-sm text-neutral-500">
-                Manage Parts, Colors, and Sets with clean create/edit flows.
-              </p>
+              <p className="mt-1 text-sm text-neutral-500">Manage Parts, Colors, and Sets with clean flows.</p>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -244,10 +265,10 @@ export default function AdminCatalog() {
         </div>
       </div>
 
-      {/* Content area */}
+      {/* Content */}
       <div className="bg-neutral-50">
         <div className="px-4 sm:px-6 py-6 grid gap-4">
-          {/* Tabs / toolbar */}
+          {/* Tabs */}
           <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="inline-flex w-full sm:w-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
@@ -272,7 +293,7 @@ export default function AdminCatalog() {
 
               <div className="sm:ml-auto text-sm text-neutral-500">
                 {loading ? (
-                  <span className="text-neutral-500">Loading…</span>
+                  <span>Loading…</span>
                 ) : (
                   <>
                     Showing <span className="font-semibold text-neutral-900">{data.length}</span>
@@ -282,9 +303,9 @@ export default function AdminCatalog() {
             </div>
           </div>
 
-          {/* Table / Cards */}
+          {/* List */}
           <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-            {/* Desktop */}
+            {/* Desktop table */}
             <div className="hidden md:block">
               <table className="w-full">
                 <thead className="bg-neutral-50 text-xs text-neutral-500">
@@ -294,60 +315,80 @@ export default function AdminCatalog() {
                     <th className="px-6 py-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
+
                 <tbody className="text-sm">
-                  {data.map((row: any) => (
-                    <tr key={row.id} className="border-t border-neutral-100 hover:bg-neutral-50/70">
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-neutral-900">
-                          {tab === "parts" && `${row.part_id} — ${row.name}`}
-                          {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
-                          {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
-                        </div>
-                        <div className="mt-1 text-xs text-neutral-500">ID: {row.id}</div>
-                      </td>
+                  {data.map((row: any) => {
+                    const thumb = getRowThumb(tab, row);
+                    return (
+                      <tr key={row.id} className="border-t border-neutral-100 hover:bg-neutral-50/70">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Thumb src={thumb} alt={tab === "sets" ? row.set_name : tab === "parts" ? row.name : row.color_name} />
 
-                      <td className="px-6 py-4 text-neutral-700">
-                        {tab === "parts" && (
-                          <div className="flex flex-wrap gap-2">
-                            <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
-                              {row.general_category}
-                            </span>
-                            <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
-                              {row.specific_category}
-                            </span>
+                            <div className="min-w-0">
+                              <div className="font-medium text-neutral-900 truncate">
+                                {tab === "parts" && `${row.part_id} — ${row.name}`}
+                                {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
+                                {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
+                              </div>
+
+                              <div className="mt-1 text-xs text-neutral-500">
+                                {tab === "partColors" ? (
+                                  <>
+                                    Color ID: <span className="font-semibold text-neutral-800">{row.id}</span>
+                                  </>
+                                ) : (
+                                  <>ID: {row.id}</>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
+                        </td>
 
-                        {tab === "partColors" && (
-                          <div className="flex flex-col gap-1">
-                            <span className="truncate">{row.part?.name ?? "—"}</span>
-                            <span className="text-xs text-neutral-500 truncate">Variant: {row.variant || "—"}</span>
+                        <td className="px-6 py-4 text-neutral-700">
+                          {tab === "parts" && (
+                            <div className="flex flex-wrap gap-2">
+                              <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                                {row.general_category}
+                              </span>
+                              <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                                {row.specific_category}
+                              </span>
+                            </div>
+                          )}
+
+                          {tab === "partColors" && (
+                            <div className="flex flex-col gap-1">
+                              <span className="truncate">{row.part?.name ?? "—"}</span>
+                              <span className="text-xs text-neutral-500 truncate">Variant: {row.variant || "—"}</span>
+                              <span className="text-xs text-neutral-500 truncate">
+                                Img: {row.image_url_1 ? "1" : "—"} / {row.image_url_2 ? "2" : "—"}
+                              </span>
+                            </div>
+                          )}
+
+                          {tab === "sets" && (
+                            <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                              {row.theme?.name ?? "—"}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-6 py-4 text-right">
+                          <div className="inline-flex gap-2">
+                            <SecondaryButton onClick={() => openEdit(row)}>Edit</SecondaryButton>
+                            <DangerButton onClick={() => handleDelete(row)}>Delete</DangerButton>
                           </div>
-                        )}
-
-                        {tab === "sets" && (
-                          <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
-                            {row.theme?.name ?? "—"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex gap-2">
-                          <SecondaryButton onClick={() => openEdit(row)}>Edit</SecondaryButton>
-                          <DangerButton onClick={() => handleDelete(row)}>Delete</DangerButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                   {!loading && data.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="px-6 py-12 text-center">
                         <div className="text-sm font-semibold text-neutral-900">No results</div>
-                        <div className="mt-1 text-sm text-neutral-500">
-                          Try a different search or create a new item.
-                        </div>
+                        <div className="mt-1 text-sm text-neutral-500">Try a different search or create a new item.</div>
                         <div className="mt-4">
                           <PrimaryButton onClick={openCreate}>+ New</PrimaryButton>
                         </div>
@@ -358,30 +399,40 @@ export default function AdminCatalog() {
               </table>
             </div>
 
-            {/* Mobile */}
+            {/* Mobile cards */}
             <div className="md:hidden p-3 grid gap-3">
-              {data.map((row: any) => (
-                <button
-                  key={row.id}
-                  onClick={() => openEdit(row)}
-                  className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
-                >
-                  <div className="text-base font-semibold text-neutral-900">
-                    {tab === "parts" && `${row.part_id} — ${row.name}`}
-                    {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
-                    {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
-                  </div>
-                  <div className="mt-1 text-sm text-neutral-500">
-                    {tab === "parts" && `${row.general_category} · ${row.specific_category}`}
-                    {tab === "partColors" && (row.part?.name ?? "—")}
-                    {tab === "sets" && (row.theme?.name ?? "—")}
-                  </div>
-                  <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
-                    <span>ID: {row.id}</span>
-                    <span className="font-medium text-neutral-900">Tap to edit</span>
-                  </div>
-                </button>
-              ))}
+              {data.map((row: any) => {
+                const thumb = getRowThumb(tab, row);
+                return (
+                  <button
+                    key={row.id}
+                    onClick={() => openEdit(row)}
+                    className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Thumb src={thumb} alt={tab === "sets" ? row.set_name : tab === "parts" ? row.name : row.color_name} />
+                      <div className="min-w-0">
+                        <div className="text-base font-semibold text-neutral-900 truncate">
+                          {tab === "parts" && `${row.part_id} — ${row.name}`}
+                          {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
+                          {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
+                        </div>
+
+                        <div className="mt-1 text-sm text-neutral-500 truncate">
+                          {tab === "parts" && `${row.general_category} · ${row.specific_category}`}
+                          {tab === "partColors" && (row.part?.name ?? "—")}
+                          {tab === "sets" && (row.theme?.name ?? "—")}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+                      {tab === "partColors" ? <span>Color ID: {row.id}</span> : <span>ID: {row.id}</span>}
+                      <span className="font-medium text-neutral-900">Tap to edit</span>
+                    </div>
+                  </button>
+                );
+              })}
 
               {!loading && data.length === 0 ? (
                 <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center">
@@ -463,77 +514,7 @@ function FormFooter({
   );
 }
 
-/** --------- REUSABLE IMAGE UPLOAD FIELD --------- */
-function ImageUploadField({
-  label,
-  folder,
-  value,
-  setValue,
-}: {
-  label: string;
-  folder: string; // e.g. "sets" | "parts" | "part-colors"
-  value: string;
-  setValue: (v: string) => void;
-}) {
-  const [uploading, setUploading] = useState(false);
-
-  async function onPick(file: File) {
-    setUploading(true);
-    try {
-      const url = await uploadImageToR2(file, folder);
-      setValue(url);
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  return (
-    <div className="grid gap-2">
-      <Field label={label} hint="Upload to R2, or paste a URL below.">
-        <input
-          type="file"
-          accept="image/*"
-          disabled={uploading}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            void onPick(file);
-          }}
-        />
-      </Field>
-
-      {value ? (
-        <div className="flex items-center gap-3 rounded-2xl border bg-neutral-50 p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={value}
-            alt="preview"
-            className="h-12 w-12 rounded-xl border bg-white object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-neutral-900">Preview</div>
-            <div className="text-xs text-neutral-500 truncate">{value}</div>
-          </div>
-        </div>
-      ) : null}
-
-      <Field label="Image URL">
-        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://…" />
-      </Field>
-
-      {uploading ? <div className="text-xs text-neutral-500">Uploading…</div> : null}
-    </div>
-  );
-}
-
-/** --------- FORMS THAT MATCH DJANGO SERIALIZERS --------- */
-
+/** -------------------- PART FORM -------------------- */
 function PartForm({
   mode,
   initial,
@@ -547,7 +528,6 @@ function PartForm({
 }) {
   const [saving, setSaving] = useState(false);
 
-  // Django fields:
   const [partId, setPartId] = useState(initial?.part_id ?? "");
   const [name, setName] = useState(initial?.name ?? "");
   const [generalCategory, setGeneralCategory] = useState(initial?.general_category ?? "");
@@ -591,11 +571,7 @@ function PartForm({
             <Input value={partId} onChange={(e) => setPartId(e.target.value)} placeholder="e.g. 3001" />
           </Field>
           <Field label="General Category">
-            <Input
-              value={generalCategory}
-              onChange={(e) => setGeneralCategory(e.target.value)}
-              placeholder="e.g. Bricks"
-            />
+            <Input value={generalCategory} onChange={(e) => setGeneralCategory(e.target.value)} placeholder="Bricks" />
           </Field>
         </div>
 
@@ -607,7 +583,7 @@ function PartForm({
           <Input
             value={specificCategory}
             onChange={(e) => setSpecificCategory(e.target.value)}
-            placeholder="e.g. Standard Bricks"
+            placeholder="Standard Bricks"
           />
         </Field>
       </Section>
@@ -617,6 +593,7 @@ function PartForm({
   );
 }
 
+/** -------------------- SET FORM -------------------- */
 function SetForm({
   mode,
   initial,
@@ -630,7 +607,6 @@ function SetForm({
 }) {
   const [saving, setSaving] = useState(false);
 
-  // Django fields:
   const [number, setNumber] = useState(initial?.number ?? "");
   const [setName, setSetName] = useState(initial?.set_name ?? "");
   const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
@@ -646,9 +622,6 @@ function SetForm({
         image_url: imageUrl.trim() ? imageUrl.trim() : null,
         age: age.trim() ? Number(age) : null,
         piece_count: pieceCount.trim() ? Number(pieceCount) : null,
-        // NOTE: your serializer has theme_id required for write.
-        // If you haven't added themes to this UI yet, you can set theme_id server-side
-        // or make it optional in serializer. For now we won't send it.
       };
 
       if (!payload.number || !payload.set_name) {
@@ -688,19 +661,8 @@ function SetForm({
         </Field>
 
         <Field label="Piece Count (optional)">
-          <Input
-            value={pieceCount}
-            onChange={(e) => setPieceCount(e.target.value)}
-            placeholder="2164"
-            inputMode="numeric"
-          />
+          <Input value={pieceCount} onChange={(e) => setPieceCount(e.target.value)} placeholder="2164" inputMode="numeric" />
         </Field>
-      </Section>
-
-      <div className="border-t" />
-
-      <Section title="Image" description="Upload to R2 or paste a URL.">
-        <ImageUploadField label="Set Image Upload" folder="sets" value={imageUrl} setValue={setImageUrl} />
       </Section>
 
       <FormFooter mode={mode} onCancel={onCancel} onSave={handleSave} saving={saving} />

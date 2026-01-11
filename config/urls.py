@@ -17,11 +17,7 @@ urlpatterns = [
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
     path("api/me/", me),
-
-    # ✅ your router endpoints (CRUD)
     path("api/", include(router.urls)),
-
-    # ✅ add core endpoints (presign upload)
     path("api/", include("core.urls")),
 ]
 
