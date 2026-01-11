@@ -13,11 +13,15 @@ router.register("admin/themes", ThemeAdminViewSet, basename="admin-themes")
 router.register("admin/sets", SetAdminViewSet, basename="admin-sets")
 
 urlpatterns = [
-    # JWT auth endpoints (THIS FIXES YOUR 404)
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
-    # your endpoints
     path("api/me/", me),
+
+    # ✅ your router endpoints (CRUD)
     path("api/", include(router.urls)),
+
+    # ✅ add core endpoints (presign upload)
+    path("api/", include("core.urls")),
 ]
+
