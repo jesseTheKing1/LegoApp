@@ -4,14 +4,18 @@ import AdminLayout from "../layouts/AdminLayout";
 import api from "../api";
 import { Drawer } from "../components/ui/Drawer";
 import { Input } from "../components/ui/Input";
-import { PartColorForm } from "./AdminCatalog/forms/PartColorForm";
 import { Thumb } from "../components/ui/Tumb";
+
+import { PartColorForm } from "./AdminCatalog/forms/PartColorForm";
 import { SetForm } from "./AdminCatalog/forms/SetForm";
 import { PartForm } from "./AdminCatalog/forms/PartForm";
-type TabKey = "parts" | "partColors" | "sets";
+import { ColorForm } from "./AdminCatalog/forms/ColorForm"; // ✅ add this
+
+type TabKey = "parts" | "colors" | "partColors" | "sets";
 
 const ENDPOINTS = {
   parts: "/admin/parts/",
+  colors: "/admin/colors/", // ✅ add this
   partColors: "/admin/part-colors/",
   sets: "/admin/sets/",
   themes: "/admin/themes/",
@@ -70,17 +74,28 @@ export type Part = {
   name: string;
   general_category: string;
   specific_category: string;
-  thumb_url?: string | null; // backend should provide this (recommended)
+  thumb_url?: string | null;
+};
+
+export type Color = {
+  id: number;
+  lego_id: number | null;
+  name: string;
+  hex: string; // "#RRGGBB" or ""
+  is_transparent?: boolean;
+  is_metallic?: boolean;
 };
 
 export type PartColor = {
-  id: number; // ✅ THIS is the color id you want to manually enter
+  id: number;
+  // If you moved to FK color, update these types later:
+  // color: Color; color_id: number; etc.
   color_name: string;
   variant: string;
   image_url_1: string | null;
   image_url_2: string | null;
-  thumb_url?: string | null; // backend can provide, otherwise fallback to url1/url2
-  part: Part; // read-only nested part
+  thumb_url?: string | null;
+  part: Part;
 };
 
 export type SetItem = {
@@ -98,15 +113,25 @@ function toast(msg: string) {
 }
 
 function getRowThumb(tab: TabKey, row: any): string | null {
-  if (tab === "parts") {
-    // expects backend field thumb_url; if not present it will show placeholder
-    return row.thumb_url ?? null;
-  }
-  if (tab === "partColors") {
-    return row.thumb_url ?? row.image_url_1 ?? row.image_url_2 ?? null;
-  }
-  // sets
-  return row.image_url ?? null;
+  if (tab === "parts") return row.thumb_url ?? null;
+
+  if (tab === "colors") return null; // Colors use a swatch (not an image)
+
+  if (tab === "partColors") return row.thumb_url ?? row.image_url_1 ?? row.image_url_2 ?? null;
+
+  return row.image_url ?? null; // sets
+}
+
+function ColorSwatch({ hex }: { hex?: string }) {
+  const h = (hex || "").trim();
+  const ok = /^#[0-9A-Fa-f]{6}$/.test(h);
+  return (
+    <div
+      className="h-6 w-6 rounded-lg border border-neutral-200"
+      style={{ backgroundColor: ok ? h : "#ffffff" }}
+      title={ok ? h : "No hex"}
+    />
+  );
 }
 
 export default function AdminCatalog() {
@@ -118,11 +143,13 @@ export default function AdminCatalog() {
 
   // data
   const [parts, setParts] = useState<Part[]>([]);
+  const [colors, setColors] = useState<Color[]>([]);
   const [partColors, setPartColors] = useState<PartColor[]>([]);
   const [sets, setSets] = useState<SetItem[]>([]);
 
   // selected rows
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
+  const [selectedColor, setSelectedColor] = useState<Color | null>(null);
   const [selectedPartColor, setSelectedPartColor] = useState<PartColor | null>(null);
   const [selectedSet, setSelectedSet] = useState<SetItem | null>(null);
 
@@ -132,6 +159,9 @@ export default function AdminCatalog() {
       if (currentTab === "parts") {
         const res = await api.get(ENDPOINTS.parts);
         setParts(res.data);
+      } else if (currentTab === "colors") {
+        const res = await api.get(ENDPOINTS.colors);
+        setColors(res.data);
       } else if (currentTab === "partColors") {
         const res = await api.get(ENDPOINTS.partColors);
         setPartColors(res.data);
@@ -176,6 +206,11 @@ export default function AdminCatalog() {
         `${p.part_id} ${p.name} ${p.general_category} ${p.specific_category}`.toLowerCase().includes(q)
       );
     }
+
+    if (tab === "colors") {
+      return colors.filter((c) => `${c.lego_id ?? ""} ${c.name} ${c.hex ?? ""}`.toLowerCase().includes(q));
+    }
+
     if (tab === "partColors") {
       return partColors.filter((pc) =>
         `${pc.part?.part_id ?? ""} ${pc.part?.name ?? ""} ${pc.id ?? ""} ${pc.color_name} ${pc.variant}`
@@ -183,12 +218,14 @@ export default function AdminCatalog() {
           .includes(q)
       );
     }
+
     return sets.filter((s) => `${s.number} ${s.set_name} ${s.theme?.name ?? ""}`.toLowerCase().includes(q));
-  }, [tab, search, parts, partColors, sets]);
+  }, [tab, search, parts, colors, partColors, sets]);
 
   function openCreate() {
     setMode("create");
     setSelectedPart(null);
+    setSelectedColor(null);
     setSelectedPartColor(null);
     setSelectedSet(null);
     setDrawerOpen(true);
@@ -197,6 +234,7 @@ export default function AdminCatalog() {
   function openEdit(row: any) {
     setMode("edit");
     if (tab === "parts") setSelectedPart(row);
+    if (tab === "colors") setSelectedColor(row);
     if (tab === "partColors") setSelectedPartColor(row);
     if (tab === "sets") setSelectedSet(row);
     setDrawerOpen(true);
@@ -210,6 +248,9 @@ export default function AdminCatalog() {
       if (tab === "parts") {
         await api.delete(`${ENDPOINTS.parts}${row.id}/`);
         setParts((prev) => prev.filter((p) => p.id !== row.id));
+      } else if (tab === "colors") {
+        await api.delete(`${ENDPOINTS.colors}${row.id}/`);
+        setColors((prev) => prev.filter((c) => c.id !== row.id));
       } else if (tab === "partColors") {
         await api.delete(`${ENDPOINTS.partColors}${row.id}/`);
         setPartColors((prev) => prev.filter((p) => p.id !== row.id));
@@ -228,6 +269,10 @@ export default function AdminCatalog() {
       ? mode === "create"
         ? "New Part"
         : "Edit Part"
+      : tab === "colors"
+      ? mode === "create"
+        ? "New Color"
+        : "Edit Color"
       : tab === "partColors"
       ? mode === "create"
         ? "New Part Color"
@@ -250,7 +295,9 @@ export default function AdminCatalog() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="w-full sm:w-[360px]">
                 <Input
-                  placeholder={`Search ${tab === "parts" ? "parts" : tab === "partColors" ? "part colors" : "sets"}…`}
+                  placeholder={`Search ${
+                    tab === "parts" ? "parts" : tab === "colors" ? "colors" : tab === "partColors" ? "part colors" : "sets"
+                  }…`}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -270,7 +317,7 @@ export default function AdminCatalog() {
           <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="inline-flex w-full sm:w-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
-                {(["parts", "partColors", "sets"] as TabKey[]).map((k) => (
+                {(["parts", "colors", "partColors", "sets"] as TabKey[]).map((k) => (
                   <button
                     key={k}
                     className={cx(
@@ -284,7 +331,7 @@ export default function AdminCatalog() {
                       setSearch("");
                     }}
                   >
-                    {k === "parts" ? "Parts" : k === "partColors" ? "Part Colors" : "Sets"}
+                    {k === "parts" ? "Parts" : k === "colors" ? "Colors" : k === "partColors" ? "Part Colors" : "Sets"}
                   </button>
                 ))}
               </div>
@@ -317,21 +364,37 @@ export default function AdminCatalog() {
                 <tbody className="text-sm">
                   {data.map((row: any) => {
                     const thumb = getRowThumb(tab, row);
+
                     return (
                       <tr key={row.id} className="border-t border-neutral-100 hover:bg-neutral-50/70">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <Thumb src={thumb} alt={tab === "sets" ? row.set_name : tab === "parts" ? row.name : row.color_name} />
+                            {tab === "colors" ? (
+                              <ColorSwatch hex={row.hex} />
+                            ) : (
+                              <Thumb
+                                src={thumb}
+                                alt={
+                                  tab === "sets" ? row.set_name : tab === "parts" ? row.name : tab === "partColors" ? row.color_name : ""
+                                }
+                              />
+                            )}
 
                             <div className="min-w-0">
                               <div className="font-medium text-neutral-900 truncate">
                                 {tab === "parts" && `${row.part_id} — ${row.name}`}
+                                {tab === "colors" && `${row.name}`}
                                 {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
                                 {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
                               </div>
 
                               <div className="mt-1 text-xs text-neutral-500">
-                                {tab === "partColors" ? (
+                                {tab === "colors" ? (
+                                  <>
+                                    LEGO ID: <span className="font-semibold text-neutral-800">{row.lego_id ?? "—"}</span> · DB ID:{" "}
+                                    {row.id}
+                                  </>
+                                ) : tab === "partColors" ? (
                                   <>
                                     Color ID: <span className="font-semibold text-neutral-800">{row.id}</span>
                                   </>
@@ -355,13 +418,28 @@ export default function AdminCatalog() {
                             </div>
                           )}
 
+                          {tab === "colors" && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                                Hex: {row.hex || "—"}
+                              </span>
+                              {!!row.is_transparent && (
+                                <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                                  Transparent
+                                </span>
+                              )}
+                              {!!row.is_metallic && (
+                                <span className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs">
+                                  Metallic
+                                </span>
+                              )}
+                            </div>
+                          )}
+
                           {tab === "partColors" && (
                             <div className="flex flex-col gap-1">
                               <span className="truncate">{row.part?.name ?? "—"}</span>
                               <span className="text-xs text-neutral-500 truncate">Variant: {row.variant || "—"}</span>
-                              <span className="text-xs text-neutral-500 truncate">
-                                Img: {row.image_url_1 ? "1" : "—"} / {row.image_url_2 ? "2" : "—"}
-                              </span>
                             </div>
                           )}
 
@@ -381,68 +459,46 @@ export default function AdminCatalog() {
                       </tr>
                     );
                   })}
-
-                  {!loading && data.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-6 py-12 text-center">
-                        <div className="text-sm font-semibold text-neutral-900">No results</div>
-                        <div className="mt-1 text-sm text-neutral-500">Try a different search or create a new item.</div>
-                        <div className="mt-4">
-                          <PrimaryButton onClick={openCreate}>+ New</PrimaryButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile cards */}
             <div className="md:hidden p-3 grid gap-3">
-              {data.map((row: any) => {
-                const thumb = getRowThumb(tab, row);
-                return (
-                  <button
-                    key={row.id}
-                    onClick={() => openEdit(row)}
-                    className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Thumb src={thumb} alt={tab === "sets" ? row.set_name : tab === "parts" ? row.name : row.color_name} />
-                      <div className="min-w-0">
-                        <div className="text-base font-semibold text-neutral-900 truncate">
-                          {tab === "parts" && `${row.part_id} — ${row.name}`}
-                          {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
-                          {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
-                        </div>
+              {data.map((row: any) => (
+                <button
+                  key={row.id}
+                  onClick={() => openEdit(row)}
+                  className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-3">
+                    {tab === "colors" ? <ColorSwatch hex={row.hex} /> : <Thumb src={getRowThumb(tab, row)} alt="" />}
+                    <div className="min-w-0">
+                      <div className="text-base font-semibold text-neutral-900 truncate">
+                        {tab === "parts" && `${row.part_id} — ${row.name}`}
+                        {tab === "colors" && `${row.name}`}
+                        {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
+                        {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
+                      </div>
 
-                        <div className="mt-1 text-sm text-neutral-500 truncate">
-                          {tab === "parts" && `${row.general_category} · ${row.specific_category}`}
-                          {tab === "partColors" && (row.part?.name ?? "—")}
-                          {tab === "sets" && (row.theme?.name ?? "—")}
-                        </div>
+                      <div className="mt-1 text-sm text-neutral-500 truncate">
+                        {tab === "colors"
+                          ? `LEGO ID: ${row.lego_id ?? "—"} · ${row.hex || "—"}`
+                          : tab === "parts"
+                          ? `${row.general_category} · ${row.specific_category}`
+                          : tab === "partColors"
+                          ? row.part?.name ?? "—"
+                          : row.theme?.name ?? "—"}
                       </div>
                     </div>
-
-                    <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
-                      {tab === "partColors" ? <span>Color ID: {row.id}</span> : <span>ID: {row.id}</span>}
-                      <span className="font-medium text-neutral-900">Tap to edit</span>
-                    </div>
-                  </button>
-                );
-              })}
-
-              {!loading && data.length === 0 ? (
-                <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center">
-                  <div className="text-sm font-semibold text-neutral-900">No results</div>
-                  <div className="mt-1 text-sm text-neutral-500">Try a different search or create a new item.</div>
-                  <div className="mt-4">
-                    <PrimaryButton onClick={openCreate} className="w-full">
-                      + New
-                    </PrimaryButton>
                   </div>
-                </div>
-              ) : null}
+
+                  <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+                    <span>ID: {row.id}</span>
+                    <span className="font-medium text-neutral-900">Tap to edit</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -450,68 +506,53 @@ export default function AdminCatalog() {
 
       {/* Drawer */}
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={drawerTitle}>
-  {tab === "parts" ? (
-    <PartForm
-      key={`parts-${mode}-${selectedPart?.id ?? "new"}`}
-      mode={mode}
-      initial={selectedPart}
-      onCancel={() => setDrawerOpen(false)}
-      onSaved={async () => {
-        setDrawerOpen(false);
-        await fetchTabData("parts");
-      }}
-    />
-  ) : tab === "partColors" ? (
-    <PartColorForm
-      key={`partColors-${mode}-${selectedPartColor?.id ?? "new"}`}
-      mode={mode}
-      initial={selectedPartColor}
-      parts={parts}
-      onCancel={() => setDrawerOpen(false)}
-      onSaved={async () => {
-        setDrawerOpen(false);
-        await fetchTabData("partColors");
-      }}
-    />
-  ) : (
-    <SetForm
-      key={`sets-${mode}-${selectedSet?.id ?? "new"}`}
-      mode={mode}
-      initial={selectedSet}
-      onCancel={() => setDrawerOpen(false)}
-      onSaved={async () => {
-        setDrawerOpen(false);
-        await fetchTabData("sets");
-      }}
-    />
-  )}
-</Drawer>
-
+        {tab === "parts" ? (
+          <PartForm
+            key={`parts-${mode}-${selectedPart?.id ?? "new"}`}
+            mode={mode}
+            initial={selectedPart}
+            onCancel={() => setDrawerOpen(false)}
+            onSaved={async () => {
+              setDrawerOpen(false);
+              await fetchTabData("parts");
+            }}
+          />
+        ) : tab === "colors" ? (
+          <ColorForm
+            key={`colors-${mode}-${selectedColor?.id ?? "new"}`}
+            mode={mode}
+            initial={selectedColor}
+            onCancel={() => setDrawerOpen(false)}
+            onSaved={async () => {
+              setDrawerOpen(false);
+              await fetchTabData("colors");
+            }}
+          />
+        ) : tab === "partColors" ? (
+          <PartColorForm
+            key={`partColors-${mode}-${selectedPartColor?.id ?? "new"}`}
+            mode={mode}
+            initial={selectedPartColor}
+            parts={parts}
+            onCancel={() => setDrawerOpen(false)}
+            onSaved={async () => {
+              setDrawerOpen(false);
+              await fetchTabData("partColors");
+            }}
+          />
+        ) : (
+          <SetForm
+            key={`sets-${mode}-${selectedSet?.id ?? "new"}`}
+            mode={mode}
+            initial={selectedSet}
+            onCancel={() => setDrawerOpen(false)}
+            onSaved={async () => {
+              setDrawerOpen(false);
+              await fetchTabData("sets");
+            }}
+          />
+        )}
+      </Drawer>
     </AdminLayout>
-  );
-}
-
-function FormFooter({
-  mode,
-  onCancel,
-  onSave,
-  saving,
-}: {
-  mode: "create" | "edit";
-  onCancel: () => void;
-  onSave: () => void;
-  saving?: boolean;
-}) {
-  return (
-    <div className="sticky bottom-0 border-t bg-white px-4 py-3">
-      <div className="flex items-center justify-end gap-2">
-        <SecondaryButton onClick={onCancel} type="button">
-          Cancel
-        </SecondaryButton>
-        <PrimaryButton onClick={onSave} disabled={!!saving} type="button">
-          {saving ? "Saving…" : mode === "create" ? "Create" : "Save changes"}
-        </PrimaryButton>
-      </div>
-    </div>
   );
 }

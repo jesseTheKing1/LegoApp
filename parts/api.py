@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAdminUser
 from .models import Part, PartColor
-from .serializers import PartSerializer, PartColorSerializer
+from .serializers import PartSerializer, PartColorSerializer, ColorSerializer
 
 class PartAdminViewSet(viewsets.ModelViewSet):
     queryset = Part.objects.all().order_by("part_id")
@@ -11,4 +11,9 @@ class PartAdminViewSet(viewsets.ModelViewSet):
 class PartColorAdminViewSet(viewsets.ModelViewSet):
     queryset = PartColor.objects.select_related("part").all()
     serializer_class = PartColorSerializer
+    permission_classes = [IsAdminUser]
+
+class ColorAdminViewSet(viewsets.ModelViewSet):
+    queryset = PartColor.objects.all()
+    serializer_class = ColorSerializer
     permission_classes = [IsAdminUser]
