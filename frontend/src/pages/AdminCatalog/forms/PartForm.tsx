@@ -1,69 +1,114 @@
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
+import api from "../../../api";
 import { Section } from "../../../components/ui/Section";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
-import { PrimaryButton, SecondaryButton } from "../../../components/ui/Button";
-import R2ImageField from "../../../components/R2ImageField";
+
+type Part = {
+  id: number;
+  part_id: string;
+  name: string;
+  general_category: string;
+  specific_category: string;
+};
 
 export function PartForm({
   mode,
   initial,
   onCancel,
-  onSubmit,
-  saving,
+  onSaved,
 }: {
   mode: "create" | "edit";
-  initial?: any;
+  initial: Part | null;
   onCancel: () => void;
-  onSubmit: (payload: any) => void;
-  saving?: boolean;
+  onSaved: () => void;
 }) {
-  // Django Part fields you showed: part_id, name, general_category, specific_category
-  const [part_id, setPartId] = useState(initial?.part_id ?? "");
-  const [name, setName] = useState(initial?.name ?? "");
-  const [general_category, setGeneralCategory] = useState(initial?.general_category ?? "");
-  const [specific_category, setSpecificCategory] = useState(initial?.specific_category ?? "");
-  const [image_url, setImageUrl] = useState(initial?.image_url ?? ""); // if your model has it
+  const [saving, setSaving] = useState(false);
+
+  // ✅ start empty (don’t depend on initial here)
+  const [partId, setPartId] = useState("");
+  const [name, setName] = useState("");
+  const [generalCategory, setGeneralCategory] = useState("");
+  const [specificCategory, setSpecificCategory] = useState("");
+
+  // ✅ hydrate when switching between edit targets
+  useEffect(() => {
+    if (mode === "create") {
+      setPartId("");
+      setName("");
+      setGeneralCategory("");
+      setSpecificCategory("");
+      return;
+    }
+
+    setPartId(initial?.part_id ?? "");
+    setName(initial?.name ?? "");
+    setGeneralCategory(initial?.general_category ?? "");
+    setSpecificCategory(initial?.specific_category ?? "");
+  }, [mode, initial?.id]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload = {
+        part_id: partId.trim(),
+        name: name.trim(),
+        general_category: generalCategory.trim(),
+        specific_category: specificCategory.trim(),
+      };
+
+      if (!payload.part_id || !payload.name) {
+        alert("Part ID and Name are required.");
+        return;
+      }
+
+      if (mode === "create") {
+        await api.post("/admin/parts/", payload);
+      } else if (initial) {
+        await api.patch(`/admin/parts/${initial.id}/`, payload);
+      }
+
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
-      <Section title="Basics" description="Matches your Django PartSerializer fields.">
+      <Section title="Basics" description="Edit a Part.">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="part_id" hint="Example: 3001">
-            <Input value={part_id} onChange={(e) => setPartId(e.target.value)} />
+          <Field label="Part ID (LEGO #)">
+            <Input value={partId} onChange={(e) => setPartId(e.target.value)} />
           </Field>
-          <Field label="general_category">
-            <Input value={general_category} onChange={(e) => setGeneralCategory(e.target.value)} />
+          <Field label="General Category">
+            <Input value={generalCategory} onChange={(e) => setGeneralCategory(e.target.value)} />
           </Field>
         </div>
 
-        <Field label="name">
+        <Field label="Name">
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
 
-        <Field label="specific_category">
-          <Input value={specific_category} onChange={(e) => setSpecificCategory(e.target.value)} />
+        <Field label="Specific Category">
+          <Input value={specificCategory} onChange={(e) => setSpecificCategory(e.target.value)} />
         </Field>
       </Section>
 
-      <div className="border-t" />
-
-      <Section title="Image" description="Upload to R2 and store the public URL.">
-        <R2ImageField label="image_url" folder="parts" value={image_url} onChange={setImageUrl} />
-      </Section>
-
+      {/* reuse your footer component or inline buttons */}
       <div className="sticky bottom-0 border-t bg-white px-4 py-3">
         <div className="flex items-center justify-end gap-2">
-          <SecondaryButton type="button" onClick={onCancel}>Cancel</SecondaryButton>
-          <PrimaryButton
+          <button onClick={onCancel} type="button" className="rounded-xl border px-4 py-2">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
             type="button"
-            disabled={!!saving}
-            onClick={() =>
-              onSubmit({ part_id, name, general_category, specific_category, image_url })
-            }
+            className="rounded-xl bg-neutral-900 px-4 py-2 text-white"
           >
             {saving ? "Saving…" : mode === "create" ? "Create" : "Save changes"}
-          </PrimaryButton>
+          </button>
         </div>
       </div>
     </>

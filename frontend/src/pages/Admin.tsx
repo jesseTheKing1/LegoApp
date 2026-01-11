@@ -3,13 +3,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../layouts/AdminLayout";
 import api from "../api";
 import { Drawer } from "../components/ui/Drawer";
-import { Section } from "../components/ui/Section";
-import { Field } from "../components/ui/Field";
 import { Input } from "../components/ui/Input";
-
 import { PartColorForm } from "./AdminCatalog/forms/PartColorForm";
 import { Thumb } from "../components/ui/Tumb";
-
+import { SetForm } from "./AdminCatalog/forms/SetForm";
+import { PartForm } from "./AdminCatalog/forms/PartForm";
 type TabKey = "parts" | "partColors" | "sets";
 
 const ENDPOINTS = {
@@ -452,39 +450,43 @@ export default function AdminCatalog() {
 
       {/* Drawer */}
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={drawerTitle}>
-        {tab === "parts" ? (
-          <PartForm
-            mode={mode}
-            initial={selectedPart}
-            onCancel={() => setDrawerOpen(false)}
-            onSaved={async () => {
-              setDrawerOpen(false);
-              await fetchTabData("parts");
-            }}
-          />
-        ) : tab === "partColors" ? (
-          <PartColorForm
-            mode={mode}
-            initial={selectedPartColor}
-            parts={parts}
-            onCancel={() => setDrawerOpen(false)}
-            onSaved={async () => {
-              setDrawerOpen(false);
-              await fetchTabData("partColors");
-            }}
-          />
-        ) : (
-          <SetForm
-            mode={mode}
-            initial={selectedSet}
-            onCancel={() => setDrawerOpen(false)}
-            onSaved={async () => {
-              setDrawerOpen(false);
-              await fetchTabData("sets");
-            }}
-          />
-        )}
-      </Drawer>
+  {tab === "parts" ? (
+    <PartForm
+      key={`parts-${mode}-${selectedPart?.id ?? "new"}`}
+      mode={mode}
+      initial={selectedPart}
+      onCancel={() => setDrawerOpen(false)}
+      onSaved={async () => {
+        setDrawerOpen(false);
+        await fetchTabData("parts");
+      }}
+    />
+  ) : tab === "partColors" ? (
+    <PartColorForm
+      key={`partColors-${mode}-${selectedPartColor?.id ?? "new"}`}
+      mode={mode}
+      initial={selectedPartColor}
+      parts={parts}
+      onCancel={() => setDrawerOpen(false)}
+      onSaved={async () => {
+        setDrawerOpen(false);
+        await fetchTabData("partColors");
+      }}
+    />
+  ) : (
+    <SetForm
+      key={`sets-${mode}-${selectedSet?.id ?? "new"}`}
+      mode={mode}
+      initial={selectedSet}
+      onCancel={() => setDrawerOpen(false)}
+      onSaved={async () => {
+        setDrawerOpen(false);
+        await fetchTabData("sets");
+      }}
+    />
+  )}
+</Drawer>
+
     </AdminLayout>
   );
 }
@@ -511,161 +513,5 @@ function FormFooter({
         </PrimaryButton>
       </div>
     </div>
-  );
-}
-
-/** -------------------- PART FORM -------------------- */
-function PartForm({
-  mode,
-  initial,
-  onCancel,
-  onSaved,
-}: {
-  mode: "create" | "edit";
-  initial: Part | null;
-  onCancel: () => void;
-  onSaved: () => void;
-}) {
-  const [saving, setSaving] = useState(false);
-
-  const [partId, setPartId] = useState(initial?.part_id ?? "");
-  const [name, setName] = useState(initial?.name ?? "");
-  const [generalCategory, setGeneralCategory] = useState(initial?.general_category ?? "");
-  const [specificCategory, setSpecificCategory] = useState(initial?.specific_category ?? "");
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const payload = {
-        part_id: partId.trim(),
-        name: name.trim(),
-        general_category: generalCategory.trim(),
-        specific_category: specificCategory.trim(),
-      };
-
-      if (!payload.part_id || !payload.name) {
-        alert("Part ID and Name are required.");
-        return;
-      }
-
-      if (mode === "create") {
-        await api.post(ENDPOINTS.parts, payload);
-      } else if (initial) {
-        await api.patch(`${ENDPOINTS.parts}${initial.id}/`, payload);
-      }
-
-      onSaved();
-    } catch (e: any) {
-      console.error(e);
-      alert("Save failed. Check required fields + API endpoint.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <Section title="Basics" description="These fields mirror the Django serializer.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Part ID (LEGO #)">
-            <Input value={partId} onChange={(e) => setPartId(e.target.value)} placeholder="e.g. 3001" />
-          </Field>
-          <Field label="General Category">
-            <Input value={generalCategory} onChange={(e) => setGeneralCategory(e.target.value)} placeholder="Bricks" />
-          </Field>
-        </div>
-
-        <Field label="Name">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Brick 2 x 4" />
-        </Field>
-
-        <Field label="Specific Category">
-          <Input
-            value={specificCategory}
-            onChange={(e) => setSpecificCategory(e.target.value)}
-            placeholder="Standard Bricks"
-          />
-        </Field>
-      </Section>
-
-      <FormFooter mode={mode} onCancel={onCancel} onSave={handleSave} saving={saving} />
-    </>
-  );
-}
-
-/** -------------------- SET FORM -------------------- */
-function SetForm({
-  mode,
-  initial,
-  onCancel,
-  onSaved,
-}: {
-  mode: "create" | "edit";
-  initial: SetItem | null;
-  onCancel: () => void;
-  onSaved: () => void;
-}) {
-  const [saving, setSaving] = useState(false);
-
-  const [number, setNumber] = useState(initial?.number ?? "");
-  const [setName, setSetName] = useState(initial?.set_name ?? "");
-  const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
-  const [age, setAge] = useState<string>(initial?.age?.toString() ?? "");
-  const [pieceCount, setPieceCount] = useState<string>(initial?.piece_count?.toString() ?? "");
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const payload = {
-        number: number.trim(),
-        set_name: setName.trim(),
-        image_url: imageUrl.trim() ? imageUrl.trim() : null,
-        age: age.trim() ? Number(age) : null,
-        piece_count: pieceCount.trim() ? Number(pieceCount) : null,
-      };
-
-      if (!payload.number || !payload.set_name) {
-        alert("Set number and set name are required.");
-        return;
-      }
-
-      if (mode === "create") {
-        await api.post(ENDPOINTS.sets, payload);
-      } else if (initial) {
-        await api.patch(`${ENDPOINTS.sets}${initial.id}/`, payload);
-      }
-
-      onSaved();
-    } catch (e: any) {
-      console.error(e);
-      alert("Save failed. If Django requires theme_id, add Themes tab or make theme optional.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <Section title="Set Details" description="Matches Django: number, set_name, age, piece_count.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Set Number">
-            <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. 21325" />
-          </Field>
-          <Field label="Age (optional)">
-            <Input value={age} onChange={(e) => setAge(e.target.value)} placeholder="18" inputMode="numeric" />
-          </Field>
-        </div>
-
-        <Field label="Set Name">
-          <Input value={setName} onChange={(e) => setSetName(e.target.value)} placeholder="Medieval Blacksmith" />
-        </Field>
-
-        <Field label="Piece Count (optional)">
-          <Input value={pieceCount} onChange={(e) => setPieceCount(e.target.value)} placeholder="2164" inputMode="numeric" />
-        </Field>
-      </Section>
-
-      <FormFooter mode={mode} onCancel={onCancel} onSave={handleSave} saving={saving} />
-    </>
   );
 }
