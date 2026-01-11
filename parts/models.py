@@ -18,8 +18,8 @@ class PartColor(models.Model):
     variant = models.CharField(max_length=50, blank=True, default="")  # decal/print/etc
     part_number = models.CharField(max_length=50, blank=True)  # if you have a specific combined id
 
-    image_url_1 = models.URLField(blank=True)
-    image_url_2 = models.URLField(blank=True)
+    image_url_1 = models.URLField(blank=True, null=True)
+    image_url_2 = models.URLField(blank=True, null=True)
 
     class Meta:
         constraints = [

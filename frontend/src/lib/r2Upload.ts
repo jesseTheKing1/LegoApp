@@ -6,9 +6,10 @@ type PresignResponse = {
   public_url: string;
 };
 
+
 export async function uploadImageToR2(file: File, folder: string) {
   // 1) ask backend for presigned PUT url
-  const presign = await api.post<PresignResponse>("/r2/presign/", {
+  const presign = await api.post<PresignResponse>("/r2/presign-upload/", {
     folder,
     filename: file.name,
     content_type: file.type || "application/octet-stream",

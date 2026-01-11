@@ -3,7 +3,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../layouts/AdminLayout";
 import api from "../api";
 import { uploadImageToR2 } from "../lib/r2Upload";
-
+import { Drawer } from "../components/ui/Drawer";
+import { Section } from "../components/ui/Section";
+import { Field } from "../components/ui/Field";
+import { Input } from "../components/ui/Input";
+import { PartColorForm } from "./AdminCatalog/forms/PartColorForm";
 
 type TabKey = "parts" | "partColors" | "sets";
 
@@ -17,123 +21,6 @@ const ENDPOINTS = {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function useIsMobile(breakpointPx = 768) {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < breakpointPx);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, [breakpointPx]);
-  return isMobile;
-}
-
-function Drawer({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  const isMobile = useIsMobile();
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className={cx(
-          "fixed inset-0 z-40 bg-black/40 transition-opacity",
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        )}
-        onClick={onClose}
-      />
-      {/* Panel */}
-      <div
-        className={cx(
-          "fixed z-50 bg-white shadow-2xl transition-transform",
-          isMobile
-            ? "inset-0 rounded-none"
-            : "top-0 right-0 h-full w-[520px] max-w-[92vw] rounded-l-2xl",
-          open ? "translate-x-0" : "translate-x-full"
-        )}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold">{title}</h2>
-            <p className="text-xs text-neutral-500">Upload images to R2; URLs will fill automatically.</p>
-          </div>
-          <button
-            className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-neutral-100"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
-
-        <div className={cx("h-[calc(100%-56px)] overflow-auto", isMobile && "pb-24")}>
-          {children}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="px-4 py-4">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {description ? <p className="text-xs text-neutral-500">{description}</p> : null}
-      </div>
-      <div className="grid gap-3">{children}</div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="grid gap-1">
-      <span className="text-xs font-medium text-neutral-700">{label}</span>
-      {children}
-      {hint ? <span className="text-[11px] text-neutral-500">{hint}</span> : null}
-    </label>
-  );
-}
-
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={cx(
-        "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none",
-        "focus:border-neutral-400 focus:ring-4 focus:ring-neutral-100"
-      )}
-    />
-  );
 }
 
 function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -242,7 +129,19 @@ export default function AdminCatalog() {
       setLoading(false);
     }
   }
-
+  useEffect(() => {
+  // When working on Part Colors, we need Parts for the dropdown.
+  if (tab === "partColors" && parts.length === 0) {
+    api
+      .get(ENDPOINTS.parts)
+      .then((res) => setParts(res.data))
+      .catch((e) => {
+        console.error(e);
+        toast("Failed to load Parts for Part Colors dropdown.");
+      });
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [tab]);
   useEffect(() => {
     fetchTabData(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -711,102 +610,6 @@ function PartForm({
             placeholder="e.g. Standard Bricks"
           />
         </Field>
-      </Section>
-
-      <FormFooter mode={mode} onCancel={onCancel} onSave={handleSave} saving={saving} />
-    </>
-  );
-}
-
-function PartColorForm({
-  mode,
-  initial,
-  parts,
-  onCancel,
-  onSaved,
-}: {
-  mode: "create" | "edit";
-  initial: PartColor | null;
-  parts: Part[];
-  onCancel: () => void;
-  onSaved: () => void;
-}) {
-  const [saving, setSaving] = useState(false);
-
-  // Django fields:
-  const [partPk, setPartPk] = useState<number>(initial?.part?.id ?? parts[0]?.id ?? 0);
-  const [colorName, setColorName] = useState(initial?.color_name ?? "");
-  const [variant, setVariant] = useState(initial?.variant ?? "");
-  const [image1, setImage1] = useState(initial?.image_url_1 ?? "");
-  const [image2, setImage2] = useState(initial?.image_url_2 ?? "");
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      if (!partPk) {
-        alert("Select a Part.");
-        return;
-      }
-      if (!colorName.trim()) {
-        alert("Color name is required.");
-        return;
-      }
-
-      const payload = {
-        part_id: partPk, // IMPORTANT: this is Part PK, not part_id string
-        color_name: colorName.trim(),
-        variant: variant.trim(),
-        image_url_1: image1.trim() ? image1.trim() : null,
-        image_url_2: image2.trim() ? image2.trim() : null,
-      };
-
-      if (mode === "create") {
-        await api.post(ENDPOINTS.partColors, payload);
-      } else if (initial) {
-        await api.patch(`${ENDPOINTS.partColors}${initial.id}/`, payload);
-      }
-
-      onSaved();
-    } catch (e: any) {
-      console.error(e);
-      alert("Save failed. Check API endpoint + serializer fields.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <Section title="Link + Variant" description="Matches Django: part_id, color_name, variant, image_url_1, image_url_2.">
-        <Field label="Part (select)">
-          <select
-            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-400 focus:ring-4 focus:ring-neutral-100"
-            value={partPk}
-            onChange={(e) => setPartPk(Number(e.target.value))}
-          >
-            {parts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.part_id} — {p.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Color Name">
-            <Input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Red" />
-          </Field>
-          <Field label="Variant">
-            <Input value={variant} onChange={(e) => setVariant(e.target.value)} placeholder="v1 / alt / print / etc." />
-          </Field>
-        </div>
-      </Section>
-
-      <div className="border-t" />
-
-      <Section title="Images" description="Upload to R2 and the URL fills in automatically.">
-        <ImageUploadField label="Image 1 Upload" folder="part-colors" value={image1} setValue={setImage1} />
-        <ImageUploadField label="Image 2 Upload" folder="part-colors" value={image2} setValue={setImage2} />
       </Section>
 
       <FormFooter mode={mode} onCancel={onCancel} onSave={handleSave} saving={saving} />
