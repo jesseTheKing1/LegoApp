@@ -14,6 +14,6 @@ class PartColorAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 class ColorAdminViewSet(viewsets.ModelViewSet):
-    queryset = PartColor.objects.all()
+    queryset = Color.objects.all().order_by("lego_id", "name")
     serializer_class = ColorSerializer
     permission_classes = [IsAdminUser]
