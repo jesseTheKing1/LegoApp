@@ -82,50 +82,40 @@ export function PartForm({
   }
 
   return (
-    <>
-      <Section title="Basics" description="Edit a Part.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Part ID (LEGO #)">
-            <Input value={partId} onChange={(e) => setPartId(e.target.value)} />
-          </Field>
-          <Field label="General Category">
-            <Input value={generalCategory} onChange={(e) => setGeneralCategory(e.target.value)} />
-          </Field>
-        </div>
+  <>
+    <Section title="Basics" description="Edit a Part.">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Part ID (LEGO #)">
+          <Input value={partId} onChange={(e) => setPartId(e.target.value)} />
+        </Field>
 
-        <Field label="Name">
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        <Field label="General Category">
+          <Input value={generalCategory} onChange={(e) => setGeneralCategory(e.target.value)} />
         </Field>
-        <Field label="Image URL (optional)">
-          <Input
-            value={imageUrl1}
-            onChange={(e) => setImageUrl1(e.target.value)}
-            placeholder="https://.../3001.png"
-          />
-        </Field>
-        <Field label="Specific Category">
-          <Input value={specificCategory} onChange={(e) => setSpecificCategory(e.target.value)} />
-        </Field>
-      </Section>
-
-      {/* reuse your footer component or inline buttons */}
-      <div className="sticky bottom-0 border-t bg-white px-4 py-3">
-        <div className="flex items-center justify-end gap-2">
-          <button onClick={onCancel} type="button" className="rounded-xl border px-4 py-2">
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            type="button"
-            className="rounded-xl bg-neutral-900 px-4 py-2 text-white"
-          >
-            {saving ? "Saving…" : mode === "create" ? "Create" : "Save changes"}
-          </button>
-        </div>
       </div>
-    </>
-  );
+
+      <Field label="Name">
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+
+      {/* ✅ Put upload field right here (no nested Section) */}
+      <ImageUploadField
+        label="Part Image (optional)"
+        folder="parts"
+        value={imageUrl1}
+        setValue={setImageUrl1}
+      />
+
+      <Field label="Specific Category">
+        <Input value={specificCategory} onChange={(e) => setSpecificCategory(e.target.value)} />
+      </Field>
+    </Section>
+
+    {/* ✅ Use your FormFooter OR keep your current buttons, but not both */}
+    <FormFooter mode={mode} onCancel={onCancel} onSave={handleSave} saving={saving} />
+  </>
+);
+
 }
 
 function cx(...classes: Array<string | false | null | undefined>) {
