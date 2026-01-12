@@ -74,7 +74,7 @@ export type Part = {
   name: string;
   general_category: string;
   specific_category: string;
-  thumb_url?: string | null;
+  image_url_1?: string | null;  // ✅ add
 };
 
 export type Color = {
@@ -113,7 +113,7 @@ function toast(msg: string) {
 }
 
 function getRowThumb(tab: TabKey, row: any): string | null {
-  if (tab === "parts") return row.thumb_url ?? null;
+  if (tab === "parts") return row.image_url_1 ?? null; 
 
   if (tab === "colors") return null; // Colors use a swatch (not an image)
 

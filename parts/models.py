@@ -15,6 +15,7 @@ class Color(models.Model):
         return f"{self.name}{f' ({self.lego_id})' if self.lego_id is not None else ''}"
 
 class Part(models.Model):
+    image_url_1 = models.URLField(blank=True, null=True)
     part_id = models.CharField(max_length=50, unique=True)   # shape id (e.g., "3001")
     name = models.CharField(max_length=120)
     general_category = models.CharField(max_length=80, blank=True)
