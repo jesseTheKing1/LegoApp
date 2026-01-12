@@ -88,8 +88,6 @@ export type Color = {
 
 export type PartColor = {
   id: number;
-  // If you moved to FK color, update these types later:
-  // color: Color; color_id: number; etc.
   color_name: string;
   variant: string;
   image_url_1: string | null;

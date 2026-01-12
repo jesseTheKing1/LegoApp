@@ -143,8 +143,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", SECRET_KEY)
 
-DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
-
+#DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+DEBUG = True 
 ALLOWED_HOSTS = os.environ.get(
     "DJANGO_ALLOWED_HOSTS",
     "legoapp-web.onrender.com,localhost,127.0.0.1"
