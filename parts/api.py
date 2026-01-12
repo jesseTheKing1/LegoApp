@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAdminUser
-from .models import Part, PartColor
+from .models import Part, PartColor, Color
 from .serializers import PartSerializer, PartColorSerializer, ColorSerializer
 
 class PartAdminViewSet(viewsets.ModelViewSet):
