@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='partcolor',
             name='color',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='part_colors', to='parts.color'),
+            #field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='part_colors', to='parts.color'),
         ),
         migrations.AddConstraint(
             model_name='partcolor',
