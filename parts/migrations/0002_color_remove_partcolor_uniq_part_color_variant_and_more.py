@@ -50,8 +50,4 @@ class Migration(migrations.Migration):
             model_name='partcolor',
             constraint=models.UniqueConstraint(fields=('part', 'color', 'variant'), name='uniq_part_color_variant'),
         ),
-        migrations.RemoveField(
-            model_name='partcolor',
-            name='color_name',
-        ),
     ]
