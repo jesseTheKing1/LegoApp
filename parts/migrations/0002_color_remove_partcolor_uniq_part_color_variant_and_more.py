@@ -41,11 +41,6 @@ class Migration(migrations.Migration):
             name='image_url_2',
             field=models.URLField(blank=True, null=True),
         ),
-        migrations.AddField(
-            model_name='partcolor',
-            name='color',
-            #field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='part_colors', to='parts.color'),
-        ),
         migrations.AddConstraint(
             model_name='partcolor',
             constraint=models.UniqueConstraint(fields=('part', 'color', 'variant'), name='uniq_part_color_variant'),
