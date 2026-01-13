@@ -12,7 +12,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RemoveConstraint(
             model_name='partcolor',
-            name='uniq_part_color_variant',
         ),
         migrations.AddField(
             model_name='part',
