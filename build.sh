@@ -4,7 +4,9 @@ set -o errexit
 pip install -r requirements.txt
 python manage.py collectstatic --no-input
 
-# ✅ sync migration history with existing tables
-python manage.py migrate --fake-initial
+echo "=== ABOUT TO RUN MIGRATIONS ==="
+python manage.py showmigrations parts --plan || true
+echo "=== RUNNING: migrate --fake-initial ==="
+python manage.py migrate --fake-initial --noinput
 
 python manage.py bootstrap_superuser
