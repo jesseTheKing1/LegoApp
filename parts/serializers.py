@@ -1,10 +1,6 @@
 from rest_framework import serializers
 from .models import Part, PartColor, Color
 
-class ColorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Color
-        fields = ["id", "lego_id", "name", "hex", "is_transparent", "is_metallic"]
 
 class PartSerializer(serializers.ModelSerializer):
     class Meta:
@@ -26,7 +22,7 @@ class PartColorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PartColor
-        fields = ["id", "part", "part_id", "color_name", "variant", "image_url_1", "image_url_2", "thumb_url"]
+        fields = ["id", "part", "part_id", "variant", "image_url_1", "image_url_2", "thumb_url"]
 
     def get_thumb_url(self, obj: PartColor):
         return obj.image_url_1 or obj.image_url_2 or None
