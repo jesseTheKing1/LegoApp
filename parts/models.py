@@ -4,7 +4,7 @@ class Color(models.Model):
     # Use LEGO's official color ID if you have it (recommended)
     lego_id = models.PositiveIntegerField(unique=True, null=True, blank=True)
 
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50, unique=True, null = True, blank = True)
     hex = models.CharField(max_length=7, blank=True, default="")  # "#RRGGBB"
 
     # optional metadata (nice later)
