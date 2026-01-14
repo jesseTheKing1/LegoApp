@@ -1,6 +1,10 @@
 from rest_framework import serializers
 from .models import Part, PartColor, Color
 
+class ColorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Color
+        fields = ["id", "lego_id", "name", "hex", "is_transparent", "is_metallic"]
 
 class PartSerializer(serializers.ModelSerializer):
     class Meta:
