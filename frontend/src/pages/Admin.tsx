@@ -9,16 +9,15 @@ import { Thumb } from "../components/ui/Tumb";
 import { PartColorForm } from "./AdminCatalog/forms/PartColorForm";
 import { SetForm } from "./AdminCatalog/forms/SetForm";
 import { PartForm } from "./AdminCatalog/forms/PartForm";
-import { ColorForm } from "./AdminCatalog/forms/ColorForm"; // ✅ add this
+import { ColorForm } from "./AdminCatalog/forms/ColorForm";
 
 type TabKey = "parts" | "colors" | "partColors" | "sets";
 
-const ENDPOINTS = {
+const ENDPOINTS: Record<TabKey, string> = {
   parts: "/admin/parts/",
-  colors: "/admin/colors/", // ✅ add this
+  colors: "/admin/colors/",
   partColors: "/admin/part-colors/",
   sets: "/admin/sets/",
-  themes: "/admin/themes/",
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -67,58 +66,44 @@ function DangerButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   );
 }
 
-/** ---- TYPES THAT MIRROR DJANGO SERIALIZERS ---- */
+/** TYPES (keep optional fields optional while backend is unstable) */
 export type Part = {
   id: number;
   part_id: string;
   name: string;
   general_category: string;
   specific_category: string;
-  image_url_1?: string | null;  // ✅ add
+  image_url_1?: string | null; // optional to avoid UI blowing up
 };
 
 export type Color = {
   id: number;
   lego_id: number | null;
   name: string;
-  hex: string; // "#RRGGBB" or ""
+  hex: string;
   is_transparent?: boolean;
   is_metallic?: boolean;
 };
 
 export type PartColor = {
   id: number;
-  color_name: string;
-  variant: string;
-  image_url_1: string | null;
-  image_url_2: string | null;
+  color_name?: string; // optional while you fix DB/migrations
+  variant?: string;
+  image_url_1?: string | null;
+  image_url_2?: string | null;
   thumb_url?: string | null;
-  part: Part;
+  part?: Part;
 };
 
 export type SetItem = {
   id: number;
   number: string;
   set_name: string;
-  image_url: string | null;
-  age: number | null;
-  piece_count: number | null;
-  theme?: { id: number; name: string; image_url: string | null } | null;
+  image_url?: string | null;
+  age?: number | null;
+  piece_count?: number | null;
+  theme?: { id: number; name: string; image_url?: string | null } | null;
 };
-
-function toast(msg: string) {
-  alert(msg);
-}
-
-function getRowThumb(tab: TabKey, row: any): string | null {
-  if (tab === "parts") return row.image_url_1 ?? null; 
-
-  if (tab === "colors") return null; // Colors use a swatch (not an image)
-
-  if (tab === "partColors") return row.thumb_url ?? row.image_url_1 ?? row.image_url_2 ?? null;
-
-  return row.image_url ?? null; // sets
-}
 
 function ColorSwatch({ hex }: { hex?: string }) {
   const h = (hex || "").trim();
@@ -132,12 +117,48 @@ function ColorSwatch({ hex }: { hex?: string }) {
   );
 }
 
+function getRowThumb(tab: TabKey, row: any): string | null {
+  if (tab === "parts") return row?.image_url_1 ?? null;
+  if (tab === "colors") return null;
+  if (tab === "partColors") return row?.thumb_url ?? row?.image_url_1 ?? row?.image_url_2 ?? null;
+  return row?.image_url ?? null;
+}
+
+function hasAccessToken() {
+  // adjust if you store elsewhere
+  return Boolean(localStorage.getItem("access"));
+}
+
+/**
+ * Centralized request helper:
+ * - logs backend error body
+ * - returns {ok,data,errorText}
+ */
+async function safeApiGet<T>(url: string): Promise<{ ok: true; data: T } | { ok: false; errorText: string }> {
+  try {
+    const res = await api.get(url);
+    return { ok: true, data: res.data as T };
+  } catch (e: any) {
+    const status = e?.response?.status;
+    const body = e?.response?.data;
+    const msg = typeof body === "string" ? body : JSON.stringify(body, null, 2);
+
+    // This is what you NEED to see for “column does not exist”
+    console.error("API ERROR", { url, status, body });
+
+    return { ok: false, errorText: `GET ${url} -> ${status}\n${msg}` };
+  }
+}
+
 export default function AdminCatalog() {
   const [tab, setTab] = useState<TabKey>("parts");
   const [search, setSearch] = useState("");
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [loading, setLoading] = useState(false);
+
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   // data
   const [parts, setParts] = useState<Part[]>([]);
@@ -152,27 +173,31 @@ export default function AdminCatalog() {
   const [selectedSet, setSelectedSet] = useState<SetItem | null>(null);
 
   async function fetchTabData(currentTab: TabKey) {
-    setLoading(true);
-    try {
-      if (currentTab === "parts") {
-        const res = await api.get(ENDPOINTS.parts);
-        setParts(res.data);
-      } else if (currentTab === "colors") {
-        const res = await api.get(ENDPOINTS.colors);
-        setColors(res.data);
-      } else if (currentTab === "partColors") {
-        const res = await api.get(ENDPOINTS.partColors);
-        setPartColors(res.data);
-      } else {
-        const res = await api.get(ENDPOINTS.sets);
-        setSets(res.data);
-      }
-    } catch (e: any) {
-      console.error(e);
-      toast("Failed to load data. Check API endpoints + auth.");
-    } finally {
-      setLoading(false);
+    setErrorText(null);
+
+    // ✅ Don’t hammer backend if not logged in
+    if (!hasAccessToken()) {
+      setErrorText("Not logged in. Login first so requests include Authorization token.");
+      return;
     }
+
+    setLoading(true);
+    const url = ENDPOINTS[currentTab];
+
+    const res = await safeApiGet<any[]>(url);
+    if (!res.ok) {
+      setErrorText(res.errorText);
+      setLoading(false);
+      return;
+    }
+
+    // ✅ Set the correct state bucket
+    if (currentTab === "parts") setParts(res.data as Part[]);
+    if (currentTab === "colors") setColors(res.data as Color[]);
+    if (currentTab === "partColors") setPartColors(res.data as PartColor[]);
+    if (currentTab === "sets") setSets(res.data as SetItem[]);
+
+    setLoading(false);
   }
 
   // Load tab data
@@ -185,14 +210,11 @@ export default function AdminCatalog() {
   useEffect(() => {
     if (tab !== "partColors") return;
     if (parts.length > 0) return;
+    if (!hasAccessToken()) return;
 
-    api
-      .get(ENDPOINTS.parts)
-      .then((res) => setParts(res.data))
-      .catch((e) => {
-        console.error(e);
-        toast("Failed to load Parts for Part Colors dropdown.");
-      });
+    safeApiGet<Part[]>(ENDPOINTS.parts).then((res) => {
+      if (res.ok) setParts(res.data);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, parts.length]);
 
@@ -204,19 +226,16 @@ export default function AdminCatalog() {
         `${p.part_id} ${p.name} ${p.general_category} ${p.specific_category}`.toLowerCase().includes(q)
       );
     }
-
     if (tab === "colors") {
       return colors.filter((c) => `${c.lego_id ?? ""} ${c.name} ${c.hex ?? ""}`.toLowerCase().includes(q));
     }
-
     if (tab === "partColors") {
       return partColors.filter((pc) =>
-        `${pc.part?.part_id ?? ""} ${pc.part?.name ?? ""} ${pc.id ?? ""} ${pc.color_name} ${pc.variant}`
+        `${pc.part?.part_id ?? ""} ${pc.part?.name ?? ""} ${pc.id ?? ""} ${pc.color_name ?? ""} ${pc.variant ?? ""}`
           .toLowerCase()
           .includes(q)
       );
     }
-
     return sets.filter((s) => `${s.number} ${s.set_name} ${s.theme?.name ?? ""}`.toLowerCase().includes(q));
   }, [tab, search, parts, colors, partColors, sets]);
 
@@ -239,26 +258,25 @@ export default function AdminCatalog() {
   }
 
   async function handleDelete(row: any) {
+    if (!hasAccessToken()) {
+      setErrorText("Not logged in.");
+      return;
+    }
+
     const ok = confirm("Delete this item? This cannot be undone.");
     if (!ok) return;
 
     try {
-      if (tab === "parts") {
-        await api.delete(`${ENDPOINTS.parts}${row.id}/`);
-        setParts((prev) => prev.filter((p) => p.id !== row.id));
-      } else if (tab === "colors") {
-        await api.delete(`${ENDPOINTS.colors}${row.id}/`);
-        setColors((prev) => prev.filter((c) => c.id !== row.id));
-      } else if (tab === "partColors") {
-        await api.delete(`${ENDPOINTS.partColors}${row.id}/`);
-        setPartColors((prev) => prev.filter((p) => p.id !== row.id));
-      } else {
-        await api.delete(`${ENDPOINTS.sets}${row.id}/`);
-        setSets((prev) => prev.filter((s) => s.id !== row.id));
-      }
-    } catch (e) {
-      console.error(e);
-      toast("Delete failed. Check permissions / endpoint.");
+      await api.delete(`${ENDPOINTS[tab]}${row.id}/`);
+
+      if (tab === "parts") setParts((prev) => prev.filter((p) => p.id !== row.id));
+      if (tab === "colors") setColors((prev) => prev.filter((c) => c.id !== row.id));
+      if (tab === "partColors") setPartColors((prev) => prev.filter((p) => p.id !== row.id));
+      if (tab === "sets") setSets((prev) => prev.filter((s) => s.id !== row.id));
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const body = e?.response?.data;
+      setErrorText(`DELETE ${ENDPOINTS[tab]}${row.id}/ -> ${status}\n${typeof body === "string" ? body : JSON.stringify(body, null, 2)}`);
     }
   }
 
@@ -281,7 +299,6 @@ export default function AdminCatalog() {
 
   return (
     <AdminLayout>
-      {/* Header */}
       <div className="border-b border-neutral-200 bg-white">
         <div className="px-4 sm:px-6 py-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -300,18 +317,26 @@ export default function AdminCatalog() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <PrimaryButton onClick={openCreate} className="w-full sm:w-auto">
+
+              <PrimaryButton onClick={openCreate} className="w-full sm:w-auto" disabled={!hasAccessToken()}>
                 + New
               </PrimaryButton>
             </div>
           </div>
+
+          {/* ✅ show backend error clearly */}
+          {errorText && (
+            <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+              {errorText}
+            </pre>
+          )}
         </div>
       </div>
 
-      {/* Content */}
+      {/* content */}
       <div className="bg-neutral-50">
         <div className="px-4 sm:px-6 py-6 grid gap-4">
-          {/* Tabs */}
+          {/* tabs */}
           <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="inline-flex w-full sm:w-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
@@ -346,9 +371,9 @@ export default function AdminCatalog() {
             </div>
           </div>
 
-          {/* List */}
+          {/* list */}
           <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-            {/* Desktop table */}
+            {/* Desktop */}
             <div className="hidden md:block">
               <table className="w-full">
                 <thead className="bg-neutral-50 text-xs text-neutral-500">
@@ -373,7 +398,13 @@ export default function AdminCatalog() {
                               <Thumb
                                 src={thumb}
                                 alt={
-                                  tab === "sets" ? row.set_name : tab === "parts" ? row.name : tab === "partColors" ? row.color_name : ""
+                                  tab === "sets"
+                                    ? row.set_name
+                                    : tab === "parts"
+                                    ? row.name
+                                    : tab === "partColors"
+                                    ? row.color_name ?? ""
+                                    : ""
                                 }
                               />
                             )}
@@ -382,19 +413,14 @@ export default function AdminCatalog() {
                               <div className="font-medium text-neutral-900 truncate">
                                 {tab === "parts" && `${row.part_id} — ${row.name}`}
                                 {tab === "colors" && `${row.name}`}
-                                {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
+                                {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name ?? "—"}`}
                                 {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
                               </div>
 
                               <div className="mt-1 text-xs text-neutral-500">
                                 {tab === "colors" ? (
                                   <>
-                                    LEGO ID: <span className="font-semibold text-neutral-800">{row.lego_id ?? "—"}</span> · DB ID:{" "}
-                                    {row.id}
-                                  </>
-                                ) : tab === "partColors" ? (
-                                  <>
-                                    Color ID: <span className="font-semibold text-neutral-800">{row.id}</span>
+                                    LEGO ID: <span className="font-semibold text-neutral-800">{row.lego_id ?? "—"}</span> · DB ID: {row.id}
                                   </>
                                 ) : (
                                   <>ID: {row.id}</>
@@ -437,7 +463,7 @@ export default function AdminCatalog() {
                           {tab === "partColors" && (
                             <div className="flex flex-col gap-1">
                               <span className="truncate">{row.part?.name ?? "—"}</span>
-                              <span className="text-xs text-neutral-500 truncate">Variant: {row.variant || "—"}</span>
+                              <span className="text-xs text-neutral-500 truncate">Variant: {row.variant ?? "—"}</span>
                             </div>
                           )}
 
@@ -450,8 +476,12 @@ export default function AdminCatalog() {
 
                         <td className="px-6 py-4 text-right">
                           <div className="inline-flex gap-2">
-                            <SecondaryButton onClick={() => openEdit(row)}>Edit</SecondaryButton>
-                            <DangerButton onClick={() => handleDelete(row)}>Delete</DangerButton>
+                            <SecondaryButton onClick={() => openEdit(row)} disabled={!hasAccessToken()}>
+                              Edit
+                            </SecondaryButton>
+                            <DangerButton onClick={() => handleDelete(row)} disabled={!hasAccessToken()}>
+                              Delete
+                            </DangerButton>
                           </div>
                         </td>
                       </tr>
@@ -461,13 +491,14 @@ export default function AdminCatalog() {
               </table>
             </div>
 
-            {/* Mobile cards */}
+            {/* Mobile cards (kept minimal) */}
             <div className="md:hidden p-3 grid gap-3">
               {data.map((row: any) => (
                 <button
                   key={row.id}
                   onClick={() => openEdit(row)}
                   className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+                  disabled={!hasAccessToken()}
                 >
                   <div className="flex items-center gap-3">
                     {tab === "colors" ? <ColorSwatch hex={row.hex} /> : <Thumb src={getRowThumb(tab, row)} alt="" />}
@@ -475,25 +506,11 @@ export default function AdminCatalog() {
                       <div className="text-base font-semibold text-neutral-900 truncate">
                         {tab === "parts" && `${row.part_id} — ${row.name}`}
                         {tab === "colors" && `${row.name}`}
-                        {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name}`}
+                        {tab === "partColors" && `${row.part?.part_id ?? "—"} — ${row.color_name ?? "—"}`}
                         {tab === "sets" && `${row.number ?? ""} — ${row.set_name}`}
                       </div>
-
-                      <div className="mt-1 text-sm text-neutral-500 truncate">
-                        {tab === "colors"
-                          ? `LEGO ID: ${row.lego_id ?? "—"} · ${row.hex || "—"}`
-                          : tab === "parts"
-                          ? `${row.general_category} · ${row.specific_category}`
-                          : tab === "partColors"
-                          ? row.part?.name ?? "—"
-                          : row.theme?.name ?? "—"}
-                      </div>
+                      <div className="mt-1 text-sm text-neutral-500 truncate">ID: {row.id}</div>
                     </div>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
-                    <span>ID: {row.id}</span>
-                    <span className="font-medium text-neutral-900">Tap to edit</span>
                   </div>
                 </button>
               ))}
@@ -502,7 +519,6 @@ export default function AdminCatalog() {
         </div>
       </div>
 
-      {/* Drawer */}
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={drawerTitle}>
         {tab === "parts" ? (
           <PartForm

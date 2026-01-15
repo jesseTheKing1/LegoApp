@@ -15,4 +15,9 @@ class Migration(migrations.Migration):
             name='name',
             field=models.CharField(blank=True, max_length=50, null=True, unique=True),
         ),
+        migrations.AddField(
+            model_name="part",
+            name="image_url_1",
+            field=models.URLField(blank=True, null=True),
+        ),
     ]
